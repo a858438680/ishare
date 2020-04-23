@@ -1,5 +1,4 @@
 spark_data
-ml
 *.ipr
 *.iws
 *.pyc
