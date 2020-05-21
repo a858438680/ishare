@@ -21,7 +21,7 @@ import java.{util => ju}
 
 import org.apache.kafka.clients.producer.{Callback, KafkaProducer, ProducerRecord, RecordMetadata}
 
-import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.{InternalRow, SQPRowMeta}
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Cast, Literal, UnsafeProjection}
 import org.apache.spark.sql.types.{BinaryType, StringType}
 
@@ -89,6 +89,23 @@ private[kafka010] abstract class KafkaRowWriter(
         s"${KafkaSourceProvider.TOPIC_OPTION_KEY} option for setting a default topic.")
     }
     val record = new ProducerRecord[Array[Byte], Array[Byte]](topic.toString, key, value)
+    producer.send(record, callback)
+  }
+
+  protected def sendSQPRow(
+      row: InternalRow, partition: Int,
+      producer: KafkaProducer[Array[Byte], Array[Byte]]): Unit = {
+    val projectedRow = projection(row)
+    val topic = projectedRow.getUTF8String(0)
+    val key = projectedRow.getBinary(1)
+    val value = projectedRow.getBinary(2)
+    if (topic == null) {
+      throw new NullPointerException(s"null topic present in the data. Use the " +
+        s"${KafkaSourceProvider.TOPIC_OPTION_KEY} option for setting a default topic.")
+    }
+    SQPRowMeta.storeMetaIntoKey(row, key)
+    val record =
+      new ProducerRecord[Array[Byte], Array[Byte]](topic.toString, partition, key, value)
     producer.send(record, callback)
   }
 

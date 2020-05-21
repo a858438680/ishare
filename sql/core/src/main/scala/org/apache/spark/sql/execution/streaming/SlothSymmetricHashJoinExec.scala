@@ -194,9 +194,9 @@ case class SlothSymmetricHashJoinExec(
   private val enableIOLAP =
     sqlContext.sparkSession.conf.get(SQLConf.SLOTHDB_IOLAP).getOrElse(false)
   private val query_name =
-    sqlContext.sparkSession.conf.get(SQLConf.SLOTHDB_QUERYNAME).get
+    sqlContext.sparkSession.conf.get(SQLConf.SLOTHDB_QUERYNAME).getOrElse("Nothing")
   private val statRoot =
-    sqlContext.sparkSession.conf.get(SQLConf.SLOTHDB_STAT_DIR).get
+    sqlContext.sparkSession.conf.get(SQLConf.SLOTHDB_STAT_DIR).getOrElse("Nothing")
 
   val nullLeft = new GenericInternalRow(left.output.map(_.withNullability(true)).length)
   val nullRight = new GenericInternalRow(right.output.map(_.withNullability(true)).length)

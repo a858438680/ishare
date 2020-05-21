@@ -18,6 +18,7 @@
 package totem.middleground.tpch.unittest
 
 import totem.middleground.tpch.DataUtils
+import totem.middleground.tpch.TPCHSchema
 
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.functions._
@@ -28,6 +29,7 @@ class JoinTest (bootstrap: String, query: String) {
   DataUtils.bootstrap = bootstrap
 
   var query_name: String = null
+  val tpchSchema = TPCHSchema.defaultTPCHSchema
 
   def execQuery(query: String): Unit = {
     val spark = SparkSession.builder()
@@ -54,10 +56,10 @@ class JoinTest (bootstrap: String, query: String) {
   def execInnerJoin(spark: SparkSession): Unit = {
     import spark.implicits._
 
-    val o = DataUtils.loadStreamTable(spark, "orders", "o")
+    val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
           .filter($"o_orderkey" isin(75233, 258050, 261607, 272002,
         348353, 446496, 465634, 529796, 554244, 535873))
-    val l = DataUtils.loadStreamTable(spark, "lineitem", "l")
+    val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
       .filter(($"l_shipmode" === "MAIL")
         and ($"l_commitdate" < $"l_receiptdate")
         and ($"l_shipdate" < $"l_commitdate")
@@ -74,13 +76,13 @@ class JoinTest (bootstrap: String, query: String) {
   def execOuterJoin(spark: SparkSession): Unit = {
     import spark.implicits._
 
-    val o = DataUtils.loadStreamTable(spark, "orders", "o")
+    val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
       // .filter($"o_orderkey" isin(75233, 258050, 261607, 272002,
       //  348353, 446496, 465634, 529796, 554244, 535873))
       .filter($"o_orderkey" isin(261607, 272002, 348353, 446496,
       465634, 529796, 554244, 535873))
 
-    val l = DataUtils.loadStreamTable(spark, "lineitem", "l")
+    val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
       .filter(($"l_shipmode" === "MAIL")
         and ($"l_commitdate" < $"l_receiptdate")
         and ($"l_shipdate" < $"l_commitdate")
@@ -98,11 +100,11 @@ class JoinTest (bootstrap: String, query: String) {
   def execSemiAntiJoin(spark: SparkSession): Unit = {
     import spark.implicits._
 
-    val o = DataUtils.loadStreamTable(spark, "orders", "o")
+    val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
       .filter($"o_orderkey" isin(10, 261607, 272002, 348353, 446496,
         465634, 529796, 554244, 535873))
 
-    val l = DataUtils.loadStreamTable(spark, "lineitem", "l")
+    val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
       .filter($"l_orderkey" isin( 446496,
         465634, 529796, 554244, 535873))
 
@@ -120,10 +122,10 @@ class JoinTest (bootstrap: String, query: String) {
     // val avgQuantity = new AvgQuantity
     val sumDoulbe = new SumExtendedprice
 
-    val p = DataUtils.loadStreamTable(spark, "part", "p")
+    val p = DataUtils.loadStreamTable(spark, "part", "p", tpchSchema)
       .filter($"p_brand" === "Brand#14" and $"p_type" === "SMALL ANODIZED STEEL")
 
-    val aggP = DataUtils.loadStreamTable(spark, "part", "p")
+    val aggP = DataUtils.loadStreamTable(spark, "part", "p", tpchSchema)
         .agg((sumDoulbe($"p_retailprice") / 20000) as "sum_retailprice")
 
     val result = p.join(aggP, $"p_retailprice" > $"sum_retailprice", "cross")

@@ -20,7 +20,8 @@ package org.apache.spark.sql.execution.datasources.v2
 import scala.collection.JavaConverters._
 
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.SlothDBContext
+import org.apache.spark.sql.catalyst.{InternalRow, SQPRowMeta}
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.plans.physical
 import org.apache.spark.sql.catalyst.plans.physical.SinglePartition
@@ -43,6 +44,8 @@ case class DataSourceV2ScanExec(
     @transient reader: DataSourceReader)
   extends LeafExecNode with DataSourceV2StringFormat
     with ColumnarBatchScan with SlothMetricsTracker {
+
+  var qidSet: Long = 0L
 
   override def simpleString: String = "ScanV2 " + metadataString
 
@@ -120,11 +123,29 @@ case class DataSourceV2ScanExec(
       val numOutputRows = longMetric("numOutputRows")
       // SlothDB
       inputRDD.map { r =>
-        numOutputRows += 1
-        r.setInsert(true)
-        r.setUpdate(false)
+        if (SlothDBContext.enable_slothdb) {
+          val key = r.getBinary(0)
+          if (key != null) {
+            SQPRowMeta.extractMetaFromKey(r, key)
+            SQPRowMeta.intersectQidSet(r, qidSet)
+          } else {
+            r.setQidSet(qidSet)
+          }
+        }
         r
-      }
+      }.filter(r => {
+        if (SlothDBContext.enable_slothdb) {
+          if (r.isRowValid()) {
+            numOutputRows += 1
+            true
+          } else {
+            false
+          }
+        } else {
+          numOutputRows += 1
+          true
+        }
+      })
     }
   }
 }

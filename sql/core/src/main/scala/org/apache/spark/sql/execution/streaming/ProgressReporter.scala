@@ -81,7 +81,7 @@ trait ProgressReporter extends Logging {
   private var lastTriggerStartTimestamp = -1L
 
   private var totalTimeSec = 0.0
-  private var lastTimeSec = 0.0
+  var lastTimeSec: Double = 0.0
 
   private val rowsArray: ArrayBuffer[Long] = new ArrayBuffer[Long]()
   private var totalRows = 0L
@@ -308,11 +308,11 @@ trait ProgressReporter extends Logging {
     print(getSummarizedMetrics(slothSummarizedMetrics, ""))
   }
 
-  private def getProcessTime(curBatchStep: Int): Double = {
+  private def getProcessTime(): Double = {
     lastTimeSec =
       if (lastExecution.executedPlan.isInstanceOf[WriteToDataSourceV2Exec]) {
         val sink = lastExecution.executedPlan.asInstanceOf[WriteToDataSourceV2Exec]
-        cpuLoadArray.append((curBatchStep, sink.cpuLoad.toArray))
+        // cpuLoadArray.append((curBatchStep, sink.cpuLoad.toArray))
 
         sink.getProcessTime().toDouble - sink.getStartUpTime().toDouble
       } else {
@@ -322,13 +322,13 @@ trait ProgressReporter extends Logging {
   }
 
   /** Finalizes the query progress and adds it to list of recent status updates. */
-  protected def finishTrigger(hasNewData: Boolean, curBatchStep: Int): Unit = {
+  protected def finishTrigger(hasNewData: Boolean, numBatch: Int): Unit = {
     assert(currentTriggerStartOffsets != null && currentTriggerEndOffsets != null)
     currentTriggerEndTimestamp = triggerClock.getTimeMillis()
 
     val executionStats = extractExecutionStats(hasNewData)
 
-    val processingTimeSec = getProcessTime(curBatchStep)
+    val processingTimeSec = getProcessTime()
 
     val inputTimeSec = if (lastTriggerStartTimestamp >= 0) {
       (currentTriggerStartTimestamp - lastTriggerStartTimestamp).toDouble / 1000
@@ -386,7 +386,7 @@ trait ProgressReporter extends Logging {
 
       slothSummarizeRowMetrics()
 
-      val batchNum = sparkSession.conf.get(SQLConf.SLOTHDB_BATCH_NUM).getOrElse(-1)
+      val batchNum = numBatch
       if (batchNum - 2 == currentBatchId) { // The one before the last batch
         val triple = outputRowsStat(slothSummarizedMetrics)
         totalRows = triple._1

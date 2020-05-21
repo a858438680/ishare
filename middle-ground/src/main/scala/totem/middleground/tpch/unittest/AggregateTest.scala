@@ -18,6 +18,7 @@
 package totem.middleground.tpch.unittest
 
 import totem.middleground.tpch.DataUtils
+import totem.middleground.tpch.TPCHSchema
 
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions._
@@ -28,6 +29,7 @@ class AggregateTest (bootstrap: String, query: String) {
     DataUtils.bootstrap = bootstrap
 
   var query_name: String = null
+  private val tpchSchema = TPCHSchema.defaultTPCHSchema
 
   def execQuery(query: String): Unit = {
     val spark = SparkSession.builder()
@@ -52,7 +54,7 @@ class AggregateTest (bootstrap: String, query: String) {
 
     val sum_disc_price = new Q1_sum_disc_price
 
-    val l = DataUtils.loadStreamTable(spark, "lineitem", "l")
+    val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
 
     val result = l.filter($"l_shipdate" <= "1998-09-01")
       .select($"l_ts", $"l_returnflag", $"l_linestatus",
@@ -76,7 +78,7 @@ class AggregateTest (bootstrap: String, query: String) {
 
     val sum_disc_price = new Q1_sum_disc_price
 
-    val l = DataUtils.loadStreamTable(spark, "lineitem", "l")
+    val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
 
     val result = l.filter($"l_shipdate" <= "1998-09-01")
       .select($"l_ts", $"l_returnflag", $"l_linestatus",

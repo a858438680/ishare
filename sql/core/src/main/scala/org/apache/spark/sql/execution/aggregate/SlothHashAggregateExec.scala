@@ -146,6 +146,12 @@ case class SlothHashAggregateExec (
   private[this] var updateOutput: Boolean = true
   private[this] var repairMode: Boolean = true
 
+  private[this] var qidCluster: Array[Long] = _
+
+  def setAggQidCluster(qidCluster: Array[Long]): Unit = {
+    this.qidCluster = qidCluster
+  }
+
   override def setDeltaOutput(isDeltaOutput: Boolean): Unit = {deltaOutput = isDeltaOutput}
 
   override def setUpdateOutput(isUpdateOutput: Boolean): Unit = {updateOutput = isUpdateOutput}

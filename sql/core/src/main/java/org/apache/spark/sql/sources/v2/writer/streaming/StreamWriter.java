@@ -18,6 +18,7 @@
 package org.apache.spark.sql.sources.v2.writer.streaming;
 
 import org.apache.spark.annotation.InterfaceStability;
+import org.apache.spark.sql.SlothDBContext;
 import org.apache.spark.sql.sources.v2.writer.DataSourceWriter;
 import org.apache.spark.sql.sources.v2.writer.DataWriter;
 import org.apache.spark.sql.sources.v2.writer.WriterCommitMessage;
@@ -67,5 +68,9 @@ public interface StreamWriter extends DataSourceWriter {
   default void abort(WriterCommitMessage[] messages) {
     throw new UnsupportedOperationException(
         "Abort without epoch should not be called with StreamWriter");
+  }
+
+  default boolean enableSlothDB() {
+    return SlothDBContext.enable_slothdb();
   }
 }

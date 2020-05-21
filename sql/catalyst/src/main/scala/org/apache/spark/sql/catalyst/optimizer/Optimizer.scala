@@ -69,7 +69,8 @@ abstract class Optimizer(sessionCatalog: SessionCatalog)
         CollapseRepartition,
         CollapseProject,
         CollapseWindow,
-        CombineFilters,
+        // Totem-SQP: We need to remove this rule to make sure shared execution work
+        // CombineFilters,
         CombineLimits,
         CombineUnions,
         // Constant folding and strength reduction

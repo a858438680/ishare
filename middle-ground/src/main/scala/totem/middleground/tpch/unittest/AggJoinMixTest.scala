@@ -18,8 +18,10 @@
 package totem.middleground.tpch.unittest
 
 import totem.middleground.tpch.DataUtils
+import totem.middleground.tpch.TPCHSchema
 
 import org.apache.spark.sql.SparkSession
+
 
 // scalastyle:off println
 
@@ -27,6 +29,7 @@ class AggJoinMixTest (bootstrap: String, query: String) {
   DataUtils.bootstrap = bootstrap
 
   private var query_name: String = null
+  private val tpchSchema = TPCHSchema.defaultTPCHSchema
 
   def execQuery(query: String): Unit = {
     val spark = SparkSession.builder()
@@ -48,11 +51,11 @@ class AggJoinMixTest (bootstrap: String, query: String) {
     val avgQuantity = new AvgQuantity
     val sumExtendedprice = new SumExtendedprice
 
-    val l = DataUtils.loadStreamTable(spark, "lineitem", "l")
-    val p = DataUtils.loadStreamTable(spark, "part", "p")
+    val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
+    val p = DataUtils.loadStreamTable(spark, "part", "p", tpchSchema)
       .filter($"p_brand" === "Brand#23" and $"p_container" === "MED BOX")
 
-    val agg_l = DataUtils.loadStreamTable(spark, "lineitem", "l")
+    val agg_l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
       .groupBy($"l_partkey")
       .agg((avgQuantity($"l_quantity") * 0.2).as("avg_quantity"))
       .select($"l_partkey".as("agg_l_partkey"), $"avg_quantity")

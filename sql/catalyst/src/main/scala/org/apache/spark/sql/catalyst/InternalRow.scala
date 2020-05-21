@@ -59,6 +59,17 @@ abstract class InternalRow extends SpecializedGetters with Serializable {
   def cleanUpdate(): Unit = {}
   def cleanStates(): Unit = {}
 
+  // SQP: QID operations
+  def isQidValid(qid: Int): Boolean = true
+  def setQidValid(qid: Int, valid: Boolean): Unit = {}
+  def isRowValid(): Boolean = true
+  def getQidSet(): Long = {0L}
+  def setQidSet(qidSet: Long): Unit = {}
+  def clearQidSet(): Unit = {}
+  def getMeta(): Long = {0L}
+  def setMeta(meta: Long): Unit = {}
+  def clearMeta(): Unit = {}
+
   /**
    * Update the decimal column at `i`.
    *

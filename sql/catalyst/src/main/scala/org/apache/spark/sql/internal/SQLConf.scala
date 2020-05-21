@@ -203,6 +203,11 @@ object SQLConf {
     .stringConf
     .createOptional
 
+  val SQP_SOURCE_PARTITION = buildConf("spark.sql.sqp.sourcepartition")
+    .doc("number of input partitions")
+    .intConf
+    .createOptional
+
   val SLOTHDB_IOLAP = buildConf("spark.sql.slothdb.iOLAP")
     .doc("enable iOLAP or not")
     .booleanConf
@@ -211,6 +216,21 @@ object SQLConf {
   val SLOTHDB_QUERYNAME = buildConf("spark.sql.slothdb.queryname")
     .doc("queryname")
     .stringConf
+    .createOptional
+
+  val SQP_PORT = buildConf("spark.sql.sqp.port")
+    .doc("sqp_port")
+    .intConf
+    .createOptional
+
+  val SQP_UID = buildConf("spark.sql.sqp.uid")
+    .doc("sqp_uid")
+    .intConf
+    .createOptional
+
+  val SQP_MED_PLAN = buildConf("spark.sql.sqp.medplan")
+    .doc("medplan")
+    .booleanConf
     .createOptional
 
   val OPTIMIZER_EXCLUDED_RULES = buildConf("spark.sql.optimizer.excludedRules")

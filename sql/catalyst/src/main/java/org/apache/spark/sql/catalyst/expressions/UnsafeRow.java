@@ -74,6 +74,7 @@ public final class UnsafeRow extends InternalRow implements Externalizable, Kryo
 
   private static final int INSERT_OFFSET = 0;
   private static final int UPDATE_OFFSET = 1;
+  private static final int OPBITNUM = 2;
 
   /**
    * Field types that can be updated in place in UnsafeRows (e.g. we support set() for these types)
@@ -148,6 +149,8 @@ public final class UnsafeRow extends InternalRow implements Externalizable, Kryo
   public UnsafeRow(int numFields) {
     this.numFields = numFields;
     this.bitSetWidthInBytes = calculateBitSetWidthInBytes(numFields);
+    this.qidMask = computeQidMask(numFields);
+    this.metaMask = computerMetaMask(numFields);
   }
 
   // for serializer
@@ -230,6 +233,83 @@ public final class UnsafeRow extends InternalRow implements Externalizable, Kryo
   public void cleanStates() {
     BitSetMethods.unset(baseObject, baseOffset, numFields + INSERT_OFFSET);
     BitSetMethods.unset(baseObject, baseOffset, numFields + UPDATE_OFFSET);
+  }
+
+  // SQP: QID operations
+  private long qidMask;
+  private long metaMask;
+
+  private static long computeQidMask(int numFields) {
+    return ~((-1L) >>> (64 - numFields - OPBITNUM));
+  }
+
+  private static long computerMetaMask(int numFields) {
+    return ~((-1L) >>> (64 - numFields));
+  }
+
+  private int getQidOffset(int qid) {
+    return qid + numFields + OPBITNUM;
+  }
+
+  @Override
+  public boolean isQidValid(int qid) {
+    return BitSetMethods.isSet(baseObject, baseOffset, getQidOffset(qid));
+  }
+
+  @Override
+  public void setQidValid(int qid, boolean valid) {
+    if (valid) BitSetMethods.set(baseObject, baseOffset, getQidOffset(qid));
+    else BitSetMethods.unset(baseObject, baseOffset, getQidOffset(qid));
+  }
+
+  @Override
+  public boolean isRowValid() {
+    long meta = Platform.getLong(baseObject, baseOffset);
+    return (meta & qidMask) != 0L;
+  }
+
+  @Override
+  public long getQidSet() {
+    long meta = Platform.getLong(baseObject, baseOffset);
+    return (meta & qidMask) >>> (numFields + OPBITNUM);
+  }
+
+  @Override
+  public void setQidSet(long qidSet) {
+    long meta = Platform.getLong(baseObject, baseOffset);
+    long opMask = ~qidMask;
+    long newMeta = (meta & opMask) | (qidSet << (numFields + OPBITNUM));
+    Platform.putLong(baseObject, baseOffset, newMeta);
+  }
+
+  @Override
+  public void clearQidSet() {
+    long meta = Platform.getLong(baseObject, baseOffset);
+    long opMask = ~qidMask;
+    long newMeta = meta & opMask;
+    Platform.putLong(baseObject, baseOffset, newMeta);
+  }
+
+  @Override
+  public long getMeta() {
+    long meta = Platform.getLong(baseObject, baseOffset);
+    return (meta & metaMask) >>> numFields;
+  }
+
+   @Override
+  public void setMeta(long inputMeta) {
+    long meta = Platform.getLong(baseObject, baseOffset);
+    long fieldMask = ~metaMask;
+    long newMeta = (meta & fieldMask) | (inputMeta << numFields);
+    Platform.putLong(baseObject, baseOffset, newMeta);
+  }
+
+  @Override
+  public void clearMeta() {
+    long meta = Platform.getLong(baseObject, baseOffset);
+    long fieldMask = ~metaMask;
+    long newMeta = meta & fieldMask;
+    Platform.putLong(baseObject, baseOffset, newMeta);
   }
 
   public void setNotNullAt(int i) {
@@ -712,6 +792,8 @@ public final class UnsafeRow extends InternalRow implements Externalizable, Kryo
     this.sizeInBytes = in.readInt();
     this.numFields = in.readInt();
     this.bitSetWidthInBytes = calculateBitSetWidthInBytes(numFields);
+    this.qidMask = computeQidMask(numFields);
+    this.metaMask = computerMetaMask(numFields);
     this.baseObject = new byte[sizeInBytes];
     in.readFully((byte[]) baseObject);
   }
@@ -730,6 +812,8 @@ public final class UnsafeRow extends InternalRow implements Externalizable, Kryo
     this.sizeInBytes = in.readInt();
     this.numFields = in.readInt();
     this.bitSetWidthInBytes = calculateBitSetWidthInBytes(numFields);
+    this.qidMask = computeQidMask(numFields);
+    this.metaMask = computerMetaMask(numFields);
     this.baseObject = new byte[sizeInBytes];
     in.read((byte[]) baseObject);
   }

@@ -35,9 +35,10 @@ import org.apache.spark.sql.execution.command.{DescribeTableCommand, ExecutedCom
 import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2ScanExec, WriteToDataSourceV2Exec}
 import org.apache.spark.sql.execution.exchange.{EnsureRequirements, ReuseExchange, ShuffleExchangeExec}
 import org.apache.spark.sql.execution.streaming.{MicroBatchExecution, SlothSimpleHashJoinExec, SlothSymmetricHashJoinExec, SlothThetaJoinExec}
-import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.sqpmeta.SubQueryInfo
 import org.apache.spark.sql.types.{BinaryType, DateType, DecimalType, TimestampType, _}
 import org.apache.spark.util.Utils
+
 
 /**
  * The primary workflow for executing relational queries using Spark.  Designed to allow easy
@@ -278,7 +279,7 @@ class QueryExecution(val sparkSession: SparkSession, val logical: LogicalPlan) {
     plan.children.foreach(setFinalAggId(_, finalAggStartId))
   }
 
-  private def initialStarupTime = 3000
+  private def initialStarupTime = 0
   private def perExecutionStartupTime = 60
   private def joinStartupTime = 15
   private def aggStartupTime = 15
@@ -341,7 +342,7 @@ class QueryExecution(val sparkSession: SparkSession, val logical: LogicalPlan) {
     // TODO: this assumes sort operator, if exists,
     // TODO: is at the end of a query plan preceded by an aggregate
     // TODO: and the sort operator always recomputes
-    markDeltaOutput(executedPlan)
+    if (!microExec.isIntermediatePlan) markDeltaOutput(executedPlan)
 
     // SlothDB: Set whether we need to propogate updates from join operators
     // This is based on the observation where if the projected output columns
@@ -377,6 +378,31 @@ class QueryExecution(val sparkSession: SparkSession, val logical: LogicalPlan) {
     // } else {
     //   setRepairMode(executedPlan, true)
     // }
+  }
+
+  private def annotateShareInfo(subQueryInfo: SubQueryInfo, plan: SparkPlan): Unit = {
+    if (plan == null) return
+    plan match {
+      case filter: SlothFilterExec =>
+        val predInfo = SubQueryInfo.extractPredInfo(filter.condition.toString)
+        val qid =
+          if (predInfo == null) -1
+          else {
+            subQueryInfo.getPredQid(predInfo)
+          }
+        filter.subQID = qid
+
+      case source: DataSourceV2ScanExec =>
+        source.qidSet = subQueryInfo.extractQidSet()
+      case agg: SlothHashAggregateExec =>
+        agg.setAggQidCluster(subQueryInfo.aggQidCluster)
+      case _ =>
+    }
+    plan.children.foreach(child => annotateShareInfo(subQueryInfo, child))
+  }
+
+  def sqpOptimization(subQueryInfo: SubQueryInfo): Unit = {
+    annotateShareInfo(subQueryInfo, executedPlan)
   }
 
   // executedPlan should not be used to initialize any SparkPlan. It should be

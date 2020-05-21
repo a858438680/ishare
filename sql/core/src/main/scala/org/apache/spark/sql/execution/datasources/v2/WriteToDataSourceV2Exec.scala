@@ -26,13 +26,14 @@ import org.apache.spark.{SparkEnv, SparkException, TaskContext}
 import org.apache.spark.executor.CommitDeniedException
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.Row
+import org.apache.spark.sql.{Row, SlothDBContext, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.encoders.{ExpressionEncoder, RowEncoder}
 import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.streaming.MicroBatchExecution
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.v2.writer._
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.util.Utils
@@ -55,6 +56,10 @@ case class WriteToDataSourceV2Exec(writer: DataSourceWriter, query: SparkPlan) e
   private var processTimeMs: Long = 0L
   private var startUpTimeMs: Long = 0L
   var cpuLoad: ArrayBuffer[Double] = new ArrayBuffer()
+
+  private val numPartitions =
+    SparkSession.getActiveSession.get.conf.get(SQLConf.SQP_SOURCE_PARTITION).getOrElse(0)
+  private val enableSlothDB = SlothDBContext.enable_slothdb
 
   override def children: Seq[SparkPlan] = Seq(query)
   override def output: Seq[Attribute] = Nil
@@ -80,28 +85,29 @@ case class WriteToDataSourceV2Exec(writer: DataSourceWriter, query: SparkPlan) e
     logInfo(s"Start processing data source writer: $writer. " +
       s"The input RDD has ${messages.length} partitions.")
 
-    val osBean = ManagementFactory.getPlatformMXBean(
-      classOf[OperatingSystemMXBean])
+    // val osBean = ManagementFactory.getPlatformMXBean(
+    //   classOf[OperatingSystemMXBean])
 
-    val cpuThread = new Thread{
-      override def run: Unit = {
-        try {
-          while (true) {
-            Thread.sleep(100)
-            cpuLoad.append(osBean.getSystemCpuLoad)
-          }
-        } catch {
-          case _: Throwable =>
-        }
-    }}
+    // val cpuThread = new Thread{
+    //   override def run: Unit = {
+    //     try {
+    //       while (true) {
+    //         Thread.sleep(100)
+    //         cpuLoad.append(osBean.getSystemCpuLoad)
+    //       }
+    //     } catch {
+    //       case _: Throwable =>
+    //     }
+    // }}
 
-    cpuThread.start()
+    // cpuThread.start()
     val start = System.nanoTime()
     try {
       sparkContext.runJob(
         rdd,
         (context: TaskContext, iter: Iterator[InternalRow]) =>
-          DataWritingSparkTask.run(writeTask, context, iter, useCommitCoordinator),
+          DataWritingSparkTask.run(writeTask, context, iter,
+            useCommitCoordinator),
         rdd.partitions.indices,
         (index, message: WriterCommitMessage) => {
           messages(index) = message
@@ -109,7 +115,7 @@ case class WriteToDataSourceV2Exec(writer: DataSourceWriter, query: SparkPlan) e
         }
       )
       val end = System.nanoTime()
-      cpuThread.interrupt()
+      // cpuThread.interrupt()
       processTimeMs = (end - start)/1000000
       print(s"execute RDD ${processTimeMs} ms\n")
 

@@ -28,6 +28,9 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
                  inputPartitions: Int, constraint: String, largeDataset: Boolean, iOLAPConf: Int,
                  incPercentage: String, costBias: String, maxStep: String, sampleTime: String)
 {
+  private var query_name: String = null
+  private val tpchSchema: TPCHSchema = new TPCHSchema
+
   val iOLAP_Q11_src = "/q11_config.csv"
   val iOLAP_Q17_src = "/q17_config.csv"
   val iOLAP_Q18_src = "/q18_config.csv"
@@ -45,9 +48,7 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
   val iOLAP_TRAINING = 2
 
   DataUtils.bootstrap = bootstrap
-  TPCHSchema.setQueryMetaData(numBatch, SF, hdfsRoot, inputPartitions, largeDataset)
-
-  private var query_name: String = null
+  tpchSchema.setQueryMetaData(numBatch, SF, hdfsRoot, inputPartitions, largeDataset)
 
   val enable_iOLAP =
     if (iOLAPConf == iOLAP_ON) "true"
@@ -153,7 +154,7 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
     val avg_disc = new DoubleAvg
     val count_order = new Count
 
-    val l = DataUtils.loadStreamTable(spark, "lineitem", "l")
+    val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
 
     val result = l.filter($"l_shipdate" <= "1998-09-01")
       .select($"l_returnflag", $"l_linestatus",
@@ -171,19 +172,19 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
       )
       // .orderBy($"l_returnflag", $"l_linestatus")
 
-    // result.explain(true)
+    result.explain(true)
 
-    DataUtils.writeToSink(result, query_name)
+    // DataUtils.writeToSink(result, query_name)
   }
 
   def execQ2_subquery(spark: SparkSession): DataFrame = {
     import spark.implicits._
 
-    val s = DataUtils.loadStreamTable(spark, "supplier", "s")
-    val ps = DataUtils.loadStreamTable(spark, "partsupp", "ps")
+    val s = DataUtils.loadStreamTable(spark, "supplier", "s", tpchSchema)
+    val ps = DataUtils.loadStreamTable(spark, "partsupp", "ps", tpchSchema)
 
-    val n = DataUtils.loadStreamTable(spark, "nation", "n")
-    val r = DataUtils.loadStreamTable(spark, "region", "r")
+    val n = DataUtils.loadStreamTable(spark, "nation", "n", tpchSchema)
+    val r = DataUtils.loadStreamTable(spark, "region", "r", tpchSchema)
       .filter($"r_name" === "EUROPE")
 
     return r.join(n, $"r_regionkey" === $"n_regionkey")
@@ -198,12 +199,12 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
   def execQ2(spark: SparkSession): Unit = {
     import spark.implicits._
 
-    val p = DataUtils.loadStreamTable(spark, "part", "p")
+    val p = DataUtils.loadStreamTable(spark, "part", "p", tpchSchema)
       .filter(($"p_size" === 15) and ($"p_type" like("%BRASS")))
-    val s = DataUtils.loadStreamTable(spark, "supplier", "s")
-    val ps = DataUtils.loadStreamTable(spark, "partsupp", "ps")
-    val n = DataUtils.loadStreamTable(spark, "nation", "n")
-    val r = DataUtils.loadStreamTable(spark, "region", "r")
+    val s = DataUtils.loadStreamTable(spark, "supplier", "s", tpchSchema)
+    val ps = DataUtils.loadStreamTable(spark, "partsupp", "ps", tpchSchema)
+    val n = DataUtils.loadStreamTable(spark, "nation", "n", tpchSchema)
+    val r = DataUtils.loadStreamTable(spark, "region", "r", tpchSchema)
       .filter($"r_name" === "EUROPE")
 
     val subquery1_a = r.join(n, $"r_regionkey" === $"n_regionkey")
@@ -230,11 +231,11 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
 
     val sum_disc_price = new Sum_disc_price
 
-    val c = DataUtils.loadStreamTable(spark, "customer", "c")
+    val c = DataUtils.loadStreamTable(spark, "customer", "c", tpchSchema)
       .filter($"c_mktsegment" === "BUILDING")
-    val o = DataUtils.loadStreamTable(spark, "orders", "o")
+    val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
       .filter($"o_orderdate" < "1995-03-15")
-    val l = DataUtils.loadStreamTable(spark, "lineitem", "l")
+    val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
       .filter($"l_shipdate" > "1995-03-15")
 
     val result = c.join(o, $"c_custkey" === $"o_custkey")
@@ -256,11 +257,11 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
 
     val order_count = new Count
 
-    val o = DataUtils.loadStreamTable(spark, "orders", "o")
+    val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
       .filter($"o_orderdate" >= "1993-07-01"
       and $"o_orderdate" < "1993-10-01")
 
-    val l = DataUtils.loadStreamTable(spark, "lineitem", "l")
+    val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
       .filter($"l_commitdate" < $"l_receiptdate")
       .select("l_orderkey")
 
@@ -280,14 +281,14 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
 
     val sum_disc_price = new Sum_disc_price
 
-    val c = DataUtils.loadStreamTable(spark, "customer", "c")
-    val o = DataUtils.loadStreamTable(spark, "orders", "o")
+    val c = DataUtils.loadStreamTable(spark, "customer", "c", tpchSchema)
+    val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
       .filter($"o_orderdate" >= "1994-01-01" and $"o_orderdate" < "1995-01-01")
-    val l = DataUtils.loadStreamTable(spark, "lineitem", "l")
-    val s = DataUtils.loadStreamTable(spark, "supplier", "s")
+    val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
+    val s = DataUtils.loadStreamTable(spark, "supplier", "s", tpchSchema)
 
-    val n = DataUtils.loadStreamTable(spark, "nation", "n")
-    val r = DataUtils.loadStreamTable(spark, "region", "r")
+    val n = DataUtils.loadStreamTable(spark, "nation", "n", tpchSchema)
+    val r = DataUtils.loadStreamTable(spark, "region", "r", tpchSchema)
       .filter($"r_name" === "ASIA")
 
     val query_a = r.join(n, $"r_regionkey" === $"n_regionkey")
@@ -313,7 +314,7 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
 
     val doubleSum = new DoubleSum
 
-    val l = DataUtils.loadStreamTable(spark, "lineitem", "l")
+    val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
       .filter(($"l_shipdate" between("1994-01-01", "1995-01-01"))
         and ($"l_discount" between(0.05, 0.07)) and ($"l_quantity" < 24))
 
@@ -330,14 +331,14 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
 
     val sum_disc_price = new Sum_disc_price
 
-    val l = DataUtils.loadStreamTable(spark, "lineitem", "l")
+    val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
       .filter($"l_shipdate" between("1995-01-01", "1996-12-31"))
-    val s = DataUtils.loadStreamTable(spark, "supplier", "s")
-    val o = DataUtils.loadStreamTable(spark, "orders", "o")
-    val c = DataUtils.loadStreamTable(spark, "customer", "c")
-    val n1 = DataUtils.loadStreamTable(spark, "nation", "n1")
+    val s = DataUtils.loadStreamTable(spark, "supplier", "s", tpchSchema)
+    val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
+    val c = DataUtils.loadStreamTable(spark, "customer", "c", tpchSchema)
+    val n1 = DataUtils.loadStreamTable(spark, "nation", "n1", tpchSchema)
       .select($"n_name".alias("supp_nation"), $"n_nationkey".as("n1_nationkey"))
-    val n2 = DataUtils.loadStreamTable(spark, "nation", "n2")
+    val n2 = DataUtils.loadStreamTable(spark, "nation", "n2", tpchSchema)
       .select($"n_name".alias("cust_nation"), $"n_nationkey".as("n2_nationkey"))
 
     val result = l.join(s, $"l_suppkey" === $"s_suppkey")
@@ -363,18 +364,18 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
 
     val udaf_q8 = new UDAF_Q8
 
-    val p = DataUtils.loadStreamTable(spark, "part", "p")
+    val p = DataUtils.loadStreamTable(spark, "part", "p", tpchSchema)
       .filter($"p_type" === "ECONOMY ANODIZED STEEL")
-    val s = DataUtils.loadStreamTable(spark, "supplier", "s")
-    val l = DataUtils.loadStreamTable(spark, "lineitem", "l")
-    val o = DataUtils.loadStreamTable(spark, "orders", "o")
+    val s = DataUtils.loadStreamTable(spark, "supplier", "s", tpchSchema)
+    val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
+    val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
       .filter($"o_orderdate" between("1995-01-01", "1996-12-31"))
-    val c = DataUtils.loadStreamTable(spark, "customer", "c")
-    val n1 = DataUtils.loadStreamTable(spark, "nation", "n1")
+    val c = DataUtils.loadStreamTable(spark, "customer", "c", tpchSchema)
+    val n1 = DataUtils.loadStreamTable(spark, "nation", "n1", tpchSchema)
       .select($"n_regionkey".alias("n1_regionkey"), $"n_nationkey".as("n1_nationkey"))
-    val n2 = DataUtils.loadStreamTable(spark, "nation", "n2")
+    val n2 = DataUtils.loadStreamTable(spark, "nation", "n2", tpchSchema)
       .select($"n_name".alias("n2_name"), $"n_nationkey".as("n2_nationkey"))
-    val r = DataUtils.loadStreamTable(spark, "region", "r")
+    val r = DataUtils.loadStreamTable(spark, "region", "r", tpchSchema)
       .filter($"r_name" === "AMERICA")
 
     val result = l.join(p, $"l_partkey" === $"p_partkey")
@@ -399,13 +400,13 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
 
     val doubleSum = new DoubleSum
 
-    val p = DataUtils.loadStreamTable(spark, "part", "p")
+    val p = DataUtils.loadStreamTable(spark, "part", "p", tpchSchema)
       .filter($"p_name" like("%green%"))
-    val s = DataUtils.loadStreamTable(spark, "supplier", "s")
-    val l = DataUtils.loadStreamTable(spark, "lineitem", "l")
-    val ps = DataUtils.loadStreamTable(spark, "partsupp", "ps")
-    val o = DataUtils.loadStreamTable(spark, "orders", "o")
-    val n = DataUtils.loadStreamTable(spark, "nation", "n")
+    val s = DataUtils.loadStreamTable(spark, "supplier", "s", tpchSchema)
+    val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
+    val ps = DataUtils.loadStreamTable(spark, "partsupp", "ps", tpchSchema)
+    val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
+    val n = DataUtils.loadStreamTable(spark, "nation", "n", tpchSchema)
 
     val result = l.join(p, $"l_partkey" === $"p_partkey")
       .join(ps, $"l_partkey" === $"ps_partkey" and $"l_suppkey" === $"ps_suppkey")
@@ -430,12 +431,12 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
 
     val revenue = new Sum_disc_price
 
-    val c = DataUtils.loadStreamTable(spark, "customer", "c")
-    val o = DataUtils.loadStreamTable(spark, "orders", "o")
+    val c = DataUtils.loadStreamTable(spark, "customer", "c", tpchSchema)
+    val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
       .filter($"o_orderdate" >= "1993-10-01" and $"o_orderdate" < "1994-01-01")
-    val l = DataUtils.loadStreamTable(spark, "lineitem", "l")
+    val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
       .filter($"l_returnflag" === "R")
-    val n = DataUtils.loadStreamTable(spark, "nation", "n")
+    val n = DataUtils.loadStreamTable(spark, "nation", "n", tpchSchema)
 
     val result = l.join(o, $"l_orderkey" === $"o_orderkey")
       .join(c, $"o_custkey" === $"c_custkey")
@@ -454,9 +455,9 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
 
     val doubleSum = new DoubleSum
 
-    val ps = DataUtils.loadStreamTable(spark, "partsupp", "ps")
-    val s = DataUtils.loadStreamTable(spark, "supplier", "s")
-    val n = DataUtils.loadStreamTable(spark, "nation", "n")
+    val ps = DataUtils.loadStreamTable(spark, "partsupp", "ps", tpchSchema)
+    val s = DataUtils.loadStreamTable(spark, "supplier", "s", tpchSchema)
+    val n = DataUtils.loadStreamTable(spark, "nation", "n", tpchSchema)
       .filter($"n_name" === "GERMANY")
 
     return s.join(n, $"s_nationkey" === $"n_nationkey")
@@ -470,9 +471,9 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
 
     val doubleSum = new DoubleSum
 
-    val ps = DataUtils.loadStreamTable(spark, "partsupp", "ps")
-    val s = DataUtils.loadStreamTable(spark, "supplier", "s")
-    val n = DataUtils.loadStreamTable(spark, "nation", "n")
+    val ps = DataUtils.loadStreamTable(spark, "partsupp", "ps", tpchSchema)
+    val s = DataUtils.loadStreamTable(spark, "supplier", "s", tpchSchema)
+    val n = DataUtils.loadStreamTable(spark, "nation", "n", tpchSchema)
       .filter($"n_name" === "GERMANY")
 
     val subquery = execQ11_subquery(spark)
@@ -501,8 +502,8 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
     val udaf_q12_low = new UDAF_Q12_LOW
     val udaf_q12_high = new UDAF_Q12_HIGH
 
-    val o = DataUtils.loadStreamTable(spark, "orders", "o")
-    val l = DataUtils.loadStreamTable(spark, "lineitem", "l")
+    val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
+    val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
       .filter(($"l_shipmode" === "MAIL")
         and ($"l_commitdate" < $"l_receiptdate")
         and ($"l_shipdate" < $"l_commitdate")
@@ -526,8 +527,8 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
     val c_count = new Count_not_null
     val custdist = new Count
 
-    val c = DataUtils.loadStreamTable(spark, "customer", "c")
-    val o = DataUtils.loadStreamTable(spark, "orders", "o")
+    val c = DataUtils.loadStreamTable(spark, "customer", "c", tpchSchema)
+    val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
       .filter(!($"o_comment" like("%special%requests%")))
 
     val result = c.join(o, $"c_custkey" === $"o_custkey", "left_outer")
@@ -550,9 +551,9 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
     val sum_disc_price = new Sum_disc_price
 
     val udaf_q14 = new UDAF_Q14
-    val l = DataUtils.loadStreamTable(spark, "lineitem", "l")
+    val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
       .filter($"l_shipdate" between("1995-09-01", "1995-10-01"))
-    val p = DataUtils.loadStreamTable(spark, "part", "p")
+    val p = DataUtils.loadStreamTable(spark, "part", "p", tpchSchema)
 
     val result = l.join(p, $"l_partkey" === $"p_partkey")
       .agg(
@@ -568,7 +569,7 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
 
     val sum_disc_price = new Sum_disc_price
 
-    val l = DataUtils.loadStreamTable(spark, "lineitem", "l")
+    val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
       .filter($"l_shipdate" between("1996-01-01", "1996-04-01"))
 
     return l.groupBy($"l_suppkey")
@@ -582,7 +583,7 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
 
     val count = new Count
 
-    val s = DataUtils.loadStreamTable(spark, "supplier", "s")
+    val s = DataUtils.loadStreamTable(spark, "supplier", "s", tpchSchema)
     val revenue = execQ15_subquery(spark)
     val max_revenue = execQ15_subquery(spark).agg(max($"total_revenue").as("max_revenue"))
 
@@ -602,14 +603,14 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
 
     val supplier_cnt = new Count
 
-    val ps = DataUtils.loadStreamTable(spark, "partsupp", "ps")
+    val ps = DataUtils.loadStreamTable(spark, "partsupp", "ps", tpchSchema)
 
-    val p = DataUtils.loadStreamTable(spark, "part", "part")
+    val p = DataUtils.loadStreamTable(spark, "part", "part", tpchSchema)
       .filter(($"p_brand" =!= "Brand#45") and
         (!($"p_type" like("MEDIUM POLISHED%")))
         and ($"p_size" isin(49, 14, 23, 45, 19, 3, 36, 9)))
 
-    val s = DataUtils.loadStreamTable(spark, "supplier", "s")
+    val s = DataUtils.loadStreamTable(spark, "supplier", "s", tpchSchema)
       .filter($"s_comment" like("%Customer%Complaints%"))
       .select($"s_suppkey")
 
@@ -631,11 +632,11 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
     val doubleAvg = new DoubleAvg
     val doubleSum = new DoubleSum
 
-    val l = DataUtils.loadStreamTable(spark, "lineitem", "l")
-    val p = DataUtils.loadStreamTable(spark, "part", "p")
+    val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
+    val p = DataUtils.loadStreamTable(spark, "part", "p", tpchSchema)
       .filter($"p_brand" === "Brand#23" and $"p_container" === "MED BOX")
 
-    val agg_l = DataUtils.loadStreamTable(spark, "lineitem", "l")
+    val agg_l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
       .groupBy($"l_partkey")
       .agg((doubleAvg($"l_quantity") * 0.2).as("avg_quantity"))
       .select($"l_partkey".as("agg_l_partkey"), $"avg_quantity")
@@ -645,7 +646,7 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
         and $"l_quantity" < $"avg_quantity").select($"l_partkey")
         .dropDuplicates()
 
-      val fullP = DataUtils.loadStreamTable(spark, "part", "p")
+      val fullP = DataUtils.loadStreamTable(spark, "part", "p", tpchSchema)
       val result = fullP.join(tmpDF, $"p_partkey" === $"l_partkey", "left_anti")
           .select($"p_partkey")
 
@@ -669,10 +670,10 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
     val doubleSum1 = new DoubleSum
     val doubleSum2 = new DoubleSum
 
-    val c = DataUtils.loadStreamTable(spark, "customer", "c")
-    val o = DataUtils.loadStreamTable(spark, "orders", "o")
-    val l = DataUtils.loadStreamTable(spark, "lineitem", "l")
-    val agg_l = DataUtils.loadStreamTable(spark, "lineitem", "l")
+    val c = DataUtils.loadStreamTable(spark, "customer", "c", tpchSchema)
+    val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
+    val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
+    val agg_l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
       .groupBy("l_orderkey")
       .agg(doubleSum1($"l_quantity").as("sum_quantity"))
       .filter($"sum_quantity" > 300)
@@ -711,10 +712,10 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
 
     val sum_disc_price = new Sum_disc_price
 
-    val l = DataUtils.loadStreamTable(spark, "lineitem", "l")
+    val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
       .filter(($"l_shipmode" isin("AIR", "AIR REG"))
         and ($"l_shipinstruct" === "DELIVER IN PERSON"))
-    val p = DataUtils.loadStreamTable(spark, "part", "p")
+    val p = DataUtils.loadStreamTable(spark, "part", "p", tpchSchema)
 
     val result = l.join(p, $"l_partkey" === $"p_partkey"
       and ((($"p_brand" === "Brand#12") and
@@ -744,7 +745,7 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
 
     val doubleSum = new DoubleSum
 
-    val agg_l = DataUtils.loadStreamTable(spark, "lineitem", "l")
+    val agg_l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
       .filter($"l_shipdate" between("1994-01-01", "1994-12-31"))
       .groupBy($"l_partkey", $"l_suppkey")
       .agg((doubleSum($"l_quantity") * 0.5).as("agg_l_sum"))
@@ -752,18 +753,18 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
       $"l_suppkey".as("agg_l_suppkey"),
       $"agg_l_sum")
 
-    val p = DataUtils.loadStreamTable(spark, "part", "p")
+    val p = DataUtils.loadStreamTable(spark, "part", "p", tpchSchema)
       .filter($"p_name" like("forest%"))
 
-    val ps = DataUtils.loadStreamTable(spark, "partsupp", "ps")
+    val ps = DataUtils.loadStreamTable(spark, "partsupp", "ps", tpchSchema)
 
     val subquery = ps.join(agg_l, $"ps_partkey" === $"agg_l_partkey"
         and $"ps_suppkey" === $"agg_l_suppkey" and $"ps_availqty" > $"agg_l_sum")
       .join(p, $"ps_partkey" === $"p_partkey", "left_semi")
       .select("ps_suppkey")
 
-    val s = DataUtils.loadStreamTable(spark, "supplier", "s")
-    val n = DataUtils.loadStreamTable(spark, "nation", "n")
+    val s = DataUtils.loadStreamTable(spark, "supplier", "s", tpchSchema)
+    val n = DataUtils.loadStreamTable(spark, "nation", "n", tpchSchema)
       .filter($"n_name" === "CANADA")
 
     if (iOLAPConf == iOLAP_TRAINING) {
@@ -791,22 +792,22 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
 
     val count = new Count
 
-    val s = DataUtils.loadStreamTable(spark, "supplier", "s")
-    val l1 = DataUtils.loadStreamTable(spark, "lineitem", "l1")
+    val s = DataUtils.loadStreamTable(spark, "supplier", "s", tpchSchema)
+    val l1 = DataUtils.loadStreamTable(spark, "lineitem", "l1", tpchSchema)
       .filter($"l_receiptdate" > $"l_commitdate")
-    val o = DataUtils.loadStreamTable(spark, "orders", "o")
+    val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
       .filter($"o_orderstatus" === "F")
-    val n = DataUtils.loadStreamTable(spark, "nation", "n")
+    val n = DataUtils.loadStreamTable(spark, "nation", "n", tpchSchema)
       .filter($"n_name" === "SAUDI ARABIA")
 
     val init_result = l1.join(o, $"l_orderkey" === $"o_orderkey")
       .join(s, $"l_suppkey" === $"s_suppkey")
       .join(n, $"s_nationkey" === $"n_nationkey")
 
-    val l2 = DataUtils.loadStreamTable(spark, "lineitem", "l2")
+    val l2 = DataUtils.loadStreamTable(spark, "lineitem", "l2", tpchSchema)
       .select($"l_orderkey".as("l2_orderkey"),
       $"l_suppkey".as("l2_suppkey"))
-    val l3 = DataUtils.loadStreamTable(spark, "lineitem", "l3")
+    val l3 = DataUtils.loadStreamTable(spark, "lineitem", "l3", tpchSchema)
       .filter($"l_receiptdate" > $"l_commitdate")
       .select($"l_orderkey".as("l3_orderkey"),
       $"l_suppkey".as("l3_suppkey"))
@@ -832,17 +833,17 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
     val numcust = new Count
     val doubleSum = new DoubleSum
 
-    val c = DataUtils.loadStreamTable(spark, "customer", "c")
+    val c = DataUtils.loadStreamTable(spark, "customer", "c", tpchSchema)
       .filter(substring($"c_phone", 1, 2)
         isin("13", "31", "23", "29", "30", "18", "17"))
 
-    val subquery1 = DataUtils.loadStreamTable(spark, "customer", "c1")
+    val subquery1 = DataUtils.loadStreamTable(spark, "customer", "c1", tpchSchema)
       .filter((substring($"c_phone", 1, 2)
         isin("13", "31", "23", "29", "30", "18", "17")) and
         ($"c_acctbal" > 0.00))
       .agg(doubleAvg($"c_acctbal").as("avg_acctbal"))
 
-    val o = DataUtils.loadStreamTable(spark, "orders", "o")
+    val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
 
     if (iOLAPConf == iOLAP_TRAINING) {
       DataUtils.writeToSink(subquery1.agg(min($"avg_acctbal"), max($"avg_acctbal")), query_name)
@@ -878,11 +879,11 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
     import spark.implicits._
 
     val avgBal = new DoubleAvg
-    val agg_c = DataUtils.loadStreamTable(spark, "customer", "c")
+    val agg_c = DataUtils.loadStreamTable(spark, "customer", "c", tpchSchema)
       .agg(avgBal($"c_acctbal").as("avg_bal"))
 
     val count = new Count
-    val c = DataUtils.loadStreamTable(spark, "customer", "c")
+    val c = DataUtils.loadStreamTable(spark, "customer", "c", tpchSchema)
     val result = c.join(agg_c, $"c_acctbal" > $"avg_bal", "cross")
         .agg(count(lit(1L)).as("high balance customer"))
 
@@ -892,8 +893,9 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
   def execScan(spark: SparkSession): Unit = {
     import spark.implicits._
 
-    val result = DataUtils.loadStreamTable(spark, "lineitem", "l")
+    val result = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
       .filter($"l_shipdate" === "2000-09-01")
+        .filter($"l_shipdate" =!= "2003-09-01")
 
     DataUtils.writeToSink(result, query_name)
   }
@@ -901,10 +903,10 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
   def execStatic(spark: SparkSession): Unit = {
     import spark.implicits._
 
-    val s = DataUtils.loadStreamTable(spark, "supplier", "s")
+    val s = DataUtils.loadStreamTable(spark, "supplier", "s", tpchSchema)
     val r = DataUtils.loadStaticTable(spark, "region", "r")
     val n = DataUtils.loadStaticTable(spark, "nation", "n")
-    val ps = DataUtils.loadStreamTable(spark, "partsupp", "ps")
+    val ps = DataUtils.loadStreamTable(spark, "partsupp", "ps", tpchSchema)
 
     val result = r.join(n, $"r_regionkey" === $"n_regionkey")
       .join(s, $"n_nationkey" === $"s_nationkey")
@@ -924,10 +926,10 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
 
     val count = new Count
 
-    val p = DataUtils.loadStreamTable(spark, "part", "p")
-    val ps = DataUtils.loadStreamTable(spark, "partsupp", "ps")
-    val l = DataUtils.loadStreamTable(spark, "lineitem", "l")
-    val o = DataUtils.loadStreamTable(spark, "orders", "o")
+    val p = DataUtils.loadStreamTable(spark, "part", "p", tpchSchema)
+    val ps = DataUtils.loadStreamTable(spark, "partsupp", "ps", tpchSchema)
+    val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
+    val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
     val result = p
         .join(ps, $"p_partkey" === $"ps_partkey", "left_anti")
         .join(l, $"p_partkey" === $"l_partkey")
@@ -942,10 +944,10 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
 
     val count = new Count
 
-    val p = DataUtils.loadStreamTable(spark, "part", "p")
-    val ps = DataUtils.loadStreamTable(spark, "partsupp", "ps")
-    val l = DataUtils.loadStreamTable(spark, "lineitem", "l")
-    val o = DataUtils.loadStreamTable(spark, "orders", "o")
+    val p = DataUtils.loadStreamTable(spark, "part", "p", tpchSchema)
+    val ps = DataUtils.loadStreamTable(spark, "partsupp", "ps", tpchSchema)
+    val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
+    val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
 
     val result = p
         .join(ps, $"p_partkey" === $"ps_partkey", "left_outer")
@@ -963,7 +965,7 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
     val c_count = new Count_not_null
     val custdist = new Count
 
-    val o = DataUtils.loadStreamTable(spark, "orders", "o")
+    val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
 
     val result = o
       .groupBy($"o_custkey")
@@ -982,10 +984,10 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
     val doubleAvg = new DoubleAvg
     val doubleAvg2 = new DoubleAvg
 
-    val c = DataUtils.loadStreamTable(spark, "customer", "c")
-    val o = DataUtils.loadStreamTable(spark, "orders", "o")
+    val c = DataUtils.loadStreamTable(spark, "customer", "c", tpchSchema)
+    val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
 
-    val agg_o = DataUtils.loadStreamTable(spark, "orders", "o")
+    val agg_o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
       .groupBy("o_custkey")
       .agg(doubleAvg($"o_totalprice").as("avg_totalprice"))
       .select($"o_custkey", $"avg_totalprice")

@@ -23,8 +23,9 @@ import java.util.concurrent.TimeUnit
 import scala.collection.mutable.ArrayBuffer
 
 import org.apache.spark.sql.{DataFrame, SparkSession}
-import org.apache.spark.sql.avro.from_avro
+import org.apache.spark.sql.avro.{from_avro, to_avro}
 import org.apache.spark.sql.functions._
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.streaming.Trigger
 
 
@@ -34,8 +35,11 @@ object DataUtils {
 
   def loadStreamTable(spark: SparkSession,
                       tableName: String,
-                      alias: String): DataFrame = {
-    val (_, avroSchema, _, _, topics, offsetPerTrigger) = TPCHSchema.GetMetaData(tableName).get
+                      alias: String,
+                      tpchSchema: TPCHSchema): DataFrame = {
+    val (_, avroSchema, _, _, topics, offsetPerTrigger) = tpchSchema.GetMetaData(tableName).get
+
+    printf(s"load $tableName with offset $offsetPerTrigger\n")
 
     return spark
       .readStream
@@ -49,7 +53,8 @@ object DataUtils {
   }
 
   def loadStaticTable(spark: SparkSession, tableName: String, alias: String): DataFrame = {
-    val (schema, _, _, staticPath, _, _) = TPCHSchema.GetMetaData(tableName).get
+    val (schema, _, _, staticPath, _, _) =
+      TPCHSchema.defaultTPCHSchema.GetMetaData(tableName).get
 
     return spark
       .read
@@ -97,13 +102,67 @@ object DataUtils {
     q.awaitTermination()
   }
 
+  def writeToSinkWithExtraOptions(query_result: DataFrame,
+                                  query_name: String,
+                                  uid: String,
+                                  numBatch: String,
+                                  constraint: String): Unit = {
+    val digit_constraint = constraint.toDouble
+    val constraint_key =
+      if (digit_constraint <= 1.0) SQLConf.SLOTHDB_LATENCY_CONSTRAINT.key
+      else SQLConf.SLOTHDB_RESOURCE_CONSTRAINT.key
+
+    val q = query_result
+      .writeStream
+      .outputMode("append")
+      .format("console")
+      .trigger(Trigger.ProcessingTime(100, TimeUnit.MILLISECONDS))
+      .option(SQLConf.SLOTHDB_BATCH_NUM.key, numBatch)
+      .option(constraint_key, constraint)
+      .option(SQLConf.SQP_UID.key, uid)
+      .queryName(query_name)
+      .start()
+
+    q.awaitTermination()
+  }
+
+  def writeToKafkaWithExtraOptions(query_result: DataFrame,
+                                   output_topic: String,
+                                   query_name: String,
+                                   uid: String,
+                                   numBatch: String,
+                                   constraint: String,
+                                   checkpointLocation: String): Unit = {
+    val digit_constraint = constraint.toDouble
+    val constraint_key =
+      if (digit_constraint <= 1.0) SQLConf.SLOTHDB_LATENCY_CONSTRAINT.key
+      else SQLConf.SLOTHDB_RESOURCE_CONSTRAINT.key
+
+    val q = query_result.select(lit("8bytekey") as "key", to_avro(struct("*")) as "value")
+      .writeStream
+      .format("kafka")
+      .trigger(Trigger.ProcessingTime(100, TimeUnit.MILLISECONDS))
+      .option(SQLConf.SLOTHDB_BATCH_NUM.key, numBatch)
+      .option(constraint_key, constraint)
+      .option(SQLConf.SQP_UID.key, uid)
+      .option(SQLConf.SQP_MED_PLAN.key, "true")
+      .option("topic", output_topic)
+      .option("kafka.bootstrap.servers", bootstrap)
+      .option("checkpointLocation", checkpointLocation + "/" + query_name.toLowerCase)
+      .queryName(query_name)
+      .start()
+
+    q.awaitTermination()
+  }
+
   def writeToFile(query_result: DataFrame, query_name: String, path: String): Unit = {
     val q = query_result.coalesce(1)
       .writeStream
       .outputMode("append")
       .format("csv")
       .option("path", path)
-      .option("checkpointLocation", TPCHSchema.checkpointLocation + "/" + query_name)
+      .option("checkpointLocation",
+        TPCHSchema.defaultTPCHSchema.checkpointLocation + "/" + query_name)
       .trigger(Trigger.ProcessingTime(100, TimeUnit.MILLISECONDS))
       .queryName(query_name)
       .start()

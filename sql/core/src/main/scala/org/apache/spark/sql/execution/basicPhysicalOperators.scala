@@ -126,8 +126,7 @@ case class SlothProjectExec(projectList: Seq[NamedExpression],
         project.initialize(index)
         val projIter = iter.map { inputRow =>
           val projRow = project(inputRow)
-          projRow.setInsert(inputRow.isInsert)
-          projRow.setUpdate(inputRow.isUpdate)
+          projRow.setMeta(inputRow.getMeta())
           projRow
         }
 
@@ -332,6 +331,7 @@ case class SlothFilterExec(condition: Expression, child: SparkPlan)
 
   private var opId: Long = _
   private var queryId: UUID = _
+  var subQID: Int = _
 
   def setID(operatorId: Long, queryRunId: UUID): Unit = {
     this.opId = operatorId
@@ -395,7 +395,10 @@ case class SlothFilterExec(condition: Expression, child: SparkPlan)
             opInput(UPDATE) += 1
           }
 
-          if (predicate.eval(thisRow)) {
+          val predPass = predicate.eval(thisRow)
+          if (!predPass) thisRow.setQidValid(subQID, false)
+
+          if (thisRow.isRowValid) {
 
             if (isInsert && !updateCase) opOutput(INSERT) += 1
             else if (!isInsert && !isUpdate) opOutput(DELETE) += 1

@@ -26,9 +26,11 @@ import org.apache.spark.sql.types.StructType
 class LoadTPCH (bootstrap: String, data_root_dir: String,
                 checkpoint: String, largeDataset: Boolean) {
 
-  TPCHSchema.datadir = data_root_dir
-  TPCHSchema.checkpointLocation = checkpoint
-  TPCHSchema.largeDataset = largeDataset
+  private val tpchSchema = TPCHSchema.defaultTPCHSchema
+
+  tpchSchema.datadir = data_root_dir
+  tpchSchema.checkpointLocation = checkpoint
+  tpchSchema.largeDataset = largeDataset
 
   def loadOneTable(tableName: String, schema: StructType, path: String, topics: String): Unit =
   {
@@ -48,7 +50,7 @@ class LoadTPCH (bootstrap: String, data_root_dir: String,
       .format("kafka")
       .option("topic", topics)
       .option("kafka.bootstrap.servers", bootstrap)
-      .option("checkpointLocation", TPCHSchema.checkpointLocation + "/" + tableName.toLowerCase)
+      .option("checkpointLocation", tpchSchema.checkpointLocation + "/" + tableName.toLowerCase)
       .start()
 
     query.awaitTermination()
@@ -56,7 +58,7 @@ class LoadTPCH (bootstrap: String, data_root_dir: String,
 
   def loadTable(tableName: String): Unit =
   {
-    TPCHSchema.GetMetaData(tableName) match {
+    tpchSchema.GetMetaData(tableName) match {
       case Some((schema, _, path, _, topics, _)) if schema != null && topics != null =>
         loadOneTable(tableName, schema, path, topics)
       case _ =>
@@ -85,14 +87,8 @@ object LoadTPCH {
     val loader = new LoadTPCH(args(0), args(1), args(2), largeDataset)
 
     val loadTables =
-      if (largeDataset) {
-        List("Part", "PartSupp", "Supplier", "Customer",
-          "Orders", "Lineitem", "Nation", "Region")
-      } else {
-         // List("Part_large", "PartSupp_large", "Supplier_large",
-         //  "Customer_large", "Orders_large")
-         List("PartSupp_large")
-      }
+      List("Part", "PartSupp", "Supplier", "Customer",
+        "Orders", "Lineitem", "Nation", "Region")
     val loadThreads = loadTables.map(new WritingThread(loader, _))
 
     loadThreads.map(_.start())

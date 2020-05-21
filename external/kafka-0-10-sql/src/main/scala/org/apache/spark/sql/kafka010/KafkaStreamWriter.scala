@@ -46,8 +46,13 @@ class KafkaStreamWriter(
 
   validateQuery(schema.toAttributes, producerParams.toMap[String, Object].asJava, topic)
 
-  override def createWriterFactory(): KafkaStreamWriterFactory =
-    KafkaStreamWriterFactory(topic, producerParams, schema)
+  override def createWriterFactory(): DataWriterFactory[InternalRow] = {
+    if (enableSlothDB()) {
+      SlothDBKafkaStreamWriterFactory(topic, producerParams, schema)
+    } else {
+      KafkaStreamWriterFactory(topic, producerParams, schema)
+    }
+  }
 
   override def commit(epochId: Long, messages: Array[WriterCommitMessage]): Unit = {}
   override def abort(epochId: Long, messages: Array[WriterCommitMessage]): Unit = {}
@@ -69,7 +74,24 @@ case class KafkaStreamWriterFactory(
       partitionId: Int,
       taskId: Long,
       epochId: Long): DataWriter[InternalRow] = {
-    new KafkaStreamDataWriter(topic, producerParams, schema.toAttributes)
+    new KafkaStreamDataWriter(topic, producerParams,
+      schema.toAttributes, 0, false)
+  }
+}
+
+/**
+ * SlothDB Writer Factory
+ */
+case class SlothDBKafkaStreamWriterFactory(
+    topic: Option[String], producerParams: Map[String, String], schema: StructType)
+  extends DataWriterFactory[InternalRow] {
+
+  override def createDataWriter(
+      partitionId: Int,
+      taskId: Long,
+      epochId: Long): DataWriter[InternalRow] = {
+    new KafkaStreamDataWriter(topic, producerParams,
+      schema.toAttributes, partitionId, true)
   }
 }
 
@@ -83,7 +105,8 @@ case class KafkaStreamWriterFactory(
  * @param inputSchema The attributes in the input data.
  */
 class KafkaStreamDataWriter(
-    targetTopic: Option[String], producerParams: Map[String, String], inputSchema: Seq[Attribute])
+    targetTopic: Option[String], producerParams: Map[String, String],
+    inputSchema: Seq[Attribute], partitionId: Int, enableSlothDB: Boolean)
   extends KafkaRowWriter(inputSchema, targetTopic) with DataWriter[InternalRow] {
   import scala.collection.JavaConverters._
 
@@ -92,7 +115,11 @@ class KafkaStreamDataWriter(
 
   def write(row: InternalRow): Unit = {
     checkForErrors()
-    sendRow(row, producer)
+    if (enableSlothDB) {
+      sendSQPRow(row, partitionId, producer)
+    } else {
+      sendRow(row, producer)
+    }
   }
 
   def commit(): WriterCommitMessage = {

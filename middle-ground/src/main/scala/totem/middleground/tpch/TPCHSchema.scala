@@ -20,7 +20,7 @@ package totem.middleground.tpch
 import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.types.StructType
 
-object TPCHSchema {
+class TPCHSchema {
   val supplierTopics = "Supplier"
   val partTopics = "Part"
   val partsuppTopics = "PartSupp"
@@ -235,4 +235,9 @@ object TPCHSchema {
   }
 
   var hdfsRoot: String = _
+}
+
+
+object TPCHSchema {
+  val defaultTPCHSchema = new TPCHSchema
 }
