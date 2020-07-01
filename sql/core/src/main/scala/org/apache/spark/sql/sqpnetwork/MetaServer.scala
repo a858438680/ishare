@@ -54,7 +54,7 @@ class MetaServer (numSubQ: Int, port: Int) {
       execMessageArray(uid) = new ExecMessage(uid, true)
 
       val planMessage = new PlanMessage(uid, baseQuery = true)
-      planMessage.setPredInfo(queryInfo(uid))
+      planMessage.setSubQInfo(queryInfo(uid))
       writePlanMessage(outputStream, planMessage)
 
       count += 1

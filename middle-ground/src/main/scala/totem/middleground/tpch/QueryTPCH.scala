@@ -240,11 +240,11 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
 
     val result = c.join(o, $"c_custkey" === $"o_custkey")
       .join(l, $"o_orderkey" === $"l_orderkey")
-      .groupBy("l_orderkey", "o_orderdate", "o_shippriority")
+      .groupBy($"l_orderkey", $"o_orderdate", $"o_shippriority")
       .agg(
         sum_disc_price($"l_extendedprice", $"l_discount").alias("revenue"))
       // .orderBy(desc("revenue"), $"o_orderdate")
-      .select("l_orderkey", "revenue", "o_orderdate", "o_shippriority")
+      .select($"l_orderkey", $"revenue", $"o_orderdate", $"o_shippriority")
       // .limit(10)
 
     // result.explain(false)
@@ -265,7 +265,8 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
       .filter($"l_commitdate" < $"l_receiptdate")
       .select("l_orderkey")
 
-    val result = o.join(l, $"o_orderkey" === $"l_orderkey", "left_semi")
+    val result = o
+      .join(l, $"o_orderkey" === $"l_orderkey", "left_semi")
       .groupBy("o_orderpriority")
       .agg(
         order_count(lit(1)).alias("order_count"))
@@ -294,7 +295,8 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
     val query_a = r.join(n, $"r_regionkey" === $"n_regionkey")
       .join(s, $"n_nationkey" === $"s_nationkey")
 
-    val query_b = l.join(o, $"l_orderkey" === $"o_orderkey")
+    val query_b = l
+      .join(o, $"l_orderkey" === $"o_orderkey")
       .join(c, $"o_custkey" === $"c_custkey")
 
     val result = query_a.join(query_b, $"s_nationkey" === $"c_nationkey"
@@ -319,8 +321,7 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
         and ($"l_discount" between(0.05, 0.07)) and ($"l_quantity" < 24))
 
     val result = l.agg(
-      doubleSum($"l_extendedprice" * $"l_discount").alias("revenue")
-    )
+      doubleSum($"l_extendedprice" * $"l_discount").alias("revenue"))
 
     // result.explain(true)
     DataUtils.writeToSink(result, query_name)
@@ -401,7 +402,7 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
     val doubleSum = new DoubleSum
 
     val p = DataUtils.loadStreamTable(spark, "part", "p", tpchSchema)
-      .filter($"p_name" like("%green%"))
+      .filter($"p_name" like ("%green%"))
     val s = DataUtils.loadStreamTable(spark, "supplier", "s", tpchSchema)
     val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
     val ps = DataUtils.loadStreamTable(spark, "partsupp", "ps", tpchSchema)
@@ -584,12 +585,15 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
     val count = new Count
 
     val s = DataUtils.loadStreamTable(spark, "supplier", "s", tpchSchema)
-    val revenue = execQ15_subquery(spark)
-    val max_revenue = execQ15_subquery(spark).agg(max($"total_revenue").as("max_revenue"))
+    val revenueA = execQ15_subquery(spark)
+    val revenueB = execQ15_subquery(spark)
+    val max_revenue = revenueB
+      .agg(
+        max($"total_revenue").as("max_revenue"))
 
     // val result = revenue.join(max_revenue, $"total_revenue" === $"max_revenue")
     //     .select($"supplier_no", $"total_revenue")
-    val result = s.join(revenue, $"s_suppkey" === $"supplier_no")
+    val result = s.join(revenueA, $"s_suppkey" === $"supplier_no")
      .join(max_revenue, $"total_revenue" >= $"max_revenue", "cross")
      .select("s_suppkey", "s_name", "s_address", "s_phone", "total_revenue")
     // .orderBy("s_suppkey")
@@ -713,11 +717,12 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
     val sum_disc_price = new Sum_disc_price
 
     val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
-      .filter(($"l_shipmode" isin("AIR", "AIR REG"))
+      .filter(($"l_shipmode" isin ("AIR", "AIR REG"))
         and ($"l_shipinstruct" === "DELIVER IN PERSON"))
     val p = DataUtils.loadStreamTable(spark, "part", "p", tpchSchema)
 
-    val result = l.join(p, $"l_partkey" === $"p_partkey"
+    val result = l
+      .join(p, $"l_partkey" === $"p_partkey"
       and ((($"p_brand" === "Brand#12") and
       ($"p_container" isin("SM CASE", "SM BOX", "SM PACK", "SM PKG")) and
       ($"l_quantity" >= 1 and $"l_quantity" <= 11) and
@@ -731,8 +736,7 @@ class QueryTPCH (bootstrap: String, query: String, numBatch: Int, shuffleNum: St
        or (($"p_brand" === "Brand#34") and
       ($"p_container" isin("LG CASE", "LG BOX", "LG PACK", "LG PKG")) and
       ($"l_quantity" >= 20 and $"l_quantity" <= 30) and
-      ($"p_size" between(1, 15))))
-      )
+      ($"p_size" between(1, 15)))))
       .agg(sum_disc_price($"l_extendedprice", $"l_discount").as("revenue"))
 
     // result.explain(true)

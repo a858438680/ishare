@@ -1,0 +1,29 @@
+def execQ5(spark: SparkSession): Unit = {
+
+  val sum_disc_price = new Sum_disc_price
+
+  val c = DataUtils.loadStreamTable(spark, "customer", "c", tpchSchema)
+  val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
+    .filter($"o_orderdate" between ("1994-01-01", "1995-01-01"))
+  val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
+  val s = DataUtils.loadStreamTable(spark, "supplier", "s", tpchSchema)
+
+  val n = DataUtils.loadStreamTable(spark, "nation", "n", tpchSchema)
+  val r = DataUtils.loadStreamTable(spark, "region", "r", tpchSchema)
+    .filter($"r_name" === "ASIA")
+
+  val query_a = r
+    .join(n, $"r_regionkey" === $"n_regionkey")
+    .join(s, $"n_nationkey" === $"s_nationkey")
+
+  val query_b = l
+    .join(o, $"l_orderkey" === $"o_orderkey")
+    .join(c, $"o_custkey" === $"c_custkey")
+
+  return query_a
+    .join(query_b, $"s_nationkey" === $"c_nationkey" and $"s_suppkey" === $"l_suppkey")
+    .groupBy($"n_name")
+    .agg(
+      sum_disc_price($"l_extendedprice", $"l_discount").as("revenue"))
+
+}

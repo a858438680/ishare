@@ -52,7 +52,8 @@ class SlothAggregationIterator (
     watermarkForData: Option[Predicate],
     deltaOutput: Boolean,
     updateOuput: Boolean,
-    repairMode: Boolean)
+    repairMode: Boolean,
+    clusterID: Int)
 extends Iterator[InternalRow] with Logging {
 
   private val opRtId = new SlothRuntimeOpId(stateInfo.get.operatorId, stateInfo.get.queryRunId)
@@ -210,22 +211,22 @@ extends Iterator[InternalRow] with Logging {
 
   private[this] val hashMapforMetaData =
     if (aggRT != null) {
-      aggRT.hashMapforMetaData.reInit(stateInfo, storeConf, hadoopConf, false)
+      aggRT.hashMapforMetaData.reInit(stateInfo, storeConf, hadoopConf, false, clusterID)
       aggRT.hashMapforMetaData
     } else {
-      new SlothAggMetaMap(groupingExpressions,
-        nonIncMetaData.length, stateInfo, storeConf, hadoopConf, watermarkForKey, false)
+      new SlothAggMetaMap(groupingExpressions, nonIncMetaData.length, stateInfo, storeConf,
+        hadoopConf, watermarkForKey, false, clusterID)
     }
 
 
   private[this] val hashMapforFullData =
     if (nonIncMetaData.nonEmpty) {
       if (aggRT != null) {
-        aggRT.hashMapforFullData.reInit(stateInfo, storeConf, hadoopConf)
+        aggRT.hashMapforFullData.reInit(stateInfo, storeConf, hadoopConf, clusterID)
         aggRT.hashMapforFullData
       } else {
-        new SlothAggFullMap(groupingExpressions,
-          originalInputAttributes, stateInfo, storeConf, hadoopConf, watermarkForData)
+        new SlothAggFullMap(groupingExpressions, originalInputAttributes, stateInfo,
+          storeConf, hadoopConf, watermarkForData, clusterID)
       }
     } else { null }
 
@@ -233,12 +234,12 @@ extends Iterator[InternalRow] with Logging {
 
   private[this] val stateStoreforResult =
     if (aggRT != null) {
-      aggRT.stateStoreforResult.reInit(stateInfo, storeConf, hadoopConf)
+      aggRT.stateStoreforResult.reInit(stateInfo, storeConf, hadoopConf, clusterID)
       aggRT.stateStoreforResult
     } else {
       new SlothAggResultStore(
         groupingExpressions, aggregateFunctions.flatMap(_.aggBufferAttributes),
-        stateInfo, storeConf, hadoopConf, watermarkForKey)
+        stateInfo, storeConf, hadoopConf, watermarkForKey, clusterID)
     }
 
   // Initializing functions used to process a row.
@@ -381,6 +382,31 @@ extends Iterator[InternalRow] with Logging {
     }
   }
 
+  def getClusterID: Int = clusterID
+
+  private val singleGroupingKey: UnsafeRow =
+    if (groupingExpressions.isEmpty) groupingProjection.apply(null)
+    else null
+  private var singleGroupBuffer: UnsafeRow = null
+  private var isNewSingleGroup = true
+
+  def processSingleGroupInput(newInput: InternalRow): Unit = {
+    if (singleGroupBuffer == null) {
+      singleGroupBuffer = hashMapforResult.getAggregationBufferFromUnsafeRow(singleGroupingKey)
+    }
+    processRow(singleGroupingKey, singleGroupBuffer, newInput, isNewSingleGroup)
+    if (isNewSingleGroup) {
+      isNewSingleGroup = false
+    }
+  }
+
+  def processMultiGroupInput(newInput: InternalRow): Unit = {
+    val groupingKey = groupingProjection.apply(newInput)
+    val buffer: UnsafeRow = hashMapforResult.getAggregationBufferFromUnsafeRow(groupingKey)
+    val isNewGroup = hashMapforResult.getIsNewGroup
+    processRow(groupingKey, buffer, newInput, isNewGroup)
+  }
+
   // Recompute NonInc functions (i.e. max/min)
   private def computeNonInc(): Unit = {
     if (hashMapforFullData != null) {
@@ -432,48 +458,75 @@ extends Iterator[InternalRow] with Logging {
     }
 
   private[this] var resultIter: Iterator[UnsafeRowPair] = _
-  private[this] var groupKey: UnsafeRow = _
+  private[this] var globalGroupKey: UnsafeRow = _
   private[this] var oldGroupValue: UnsafeRow = _
   private[this] var newGroupValue: UnsafeRow = _
 
-  processInputs()
+  // processInputs()
 
-  if (!repairMode) {
-    storeIntermediateResult()
-  } else {
-    computeNonInc()
-    storeIntermediateResult()
+  // if (!repairMode) {
+  //   storeIntermediateResult()
+  // } else {
+  //   computeNonInc()
+  //   storeIntermediateResult()
 
-    resultIter = stateStoreforResult.iterator()
-  }
+  //   resultIter = stateStoreforResult.iterator()
+  // }
 
-  TaskContext.get().addTaskCompletionListener[Unit](_ => {
-    // At the end of the task, update the task's peak memory usage. Since we destroy
-    // the map to create the sorter, their memory usages should not overlap, so it is safe
-    // to just use the max of the two.
-    val memoryConsumption = hashMapforResult.getPeakMemoryUsedBytes +
-      hashMapforMetaData.getMemoryConsumption +
-      {
-        if (hashMapforFullData != null) { hashMapforFullData.getMemoryConsumption }
-        else { 0L }
+  // TaskContext.get().addTaskCompletionListener[Unit](_ => {
+  //   // At the end of the task, update the task's peak memory usage. Since we destroy
+  //   // the map to create the sorter, their memory usages should not overlap, so it is safe
+  //   // to just use the max of the two.
+  //   val memoryConsumption = hashMapforResult.getPeakMemoryUsedBytes +
+  //     hashMapforMetaData.getMemoryConsumption +
+  //     {
+  //       if (hashMapforFullData != null) { hashMapforFullData.getMemoryConsumption }
+  //       else { 0L }
+  //     }
+  //   stateMemory.set(memoryConsumption)
+
+  //   val metrics = TaskContext.get().taskMetrics()
+  //   metrics.incPeakExecutionMemory(memoryConsumption)
+
+  //   // Updating average hashmap probe
+  //   // avgHashProbe.set(hashMapforResult.getAverageProbesPerLookup())
+
+  //   // val numKeys = stateStoreforResult.getNumKeys() +
+  //   //   hashMapforMetaData.getNumKeys() +
+  //   //   {
+  //   //     if (hashMapforFullData != null) { hashMapforFullData.getNumKeys }
+  //   //     else { 0L }
+  //   //   }
+  //   // numTotalStateRows.set(numKeys)
+
+  // })
+
+  def postProcessInput(): Unit = {
+      if (!repairMode) {
+        storeIntermediateResult()
+      } else {
+        computeNonInc()
+        storeIntermediateResult()
+
+        resultIter = stateStoreforResult.iterator()
       }
-    stateMemory.set(memoryConsumption)
 
-    val metrics = TaskContext.get().taskMetrics()
-    metrics.incPeakExecutionMemory(memoryConsumption)
+      TaskContext.get().addTaskCompletionListener[Unit](_ => {
+        // At the end of the task, update the task's peak memory usage. Since we destroy
+        // the map to create the sorter, their memory usages should not overlap, so it is safe
+        // to just use the max of the two.
+        val memoryConsumption = hashMapforResult.getPeakMemoryUsedBytes +
+          hashMapforMetaData.getMemoryConsumption +
+          {
+            if (hashMapforFullData != null) { hashMapforFullData.getMemoryConsumption }
+            else { 0L }
+          }
+        stateMemory += memoryConsumption
 
-    // Updating average hashmap probe
-    // avgHashProbe.set(hashMapforResult.getAverageProbesPerLookup())
-
-    // val numKeys = stateStoreforResult.getNumKeys() +
-    //   hashMapforMetaData.getNumKeys() +
-    //   {
-    //     if (hashMapforFullData != null) { hashMapforFullData.getNumKeys }
-    //     else { 0L }
-    //   }
-    // numTotalStateRows.set(numKeys)
-
-  })
+        val metrics = TaskContext.get().taskMetrics()
+        metrics.incPeakExecutionMemory(memoryConsumption)
+      })
+  }
 
   override final def hasNext: Boolean = {
     if (!repairMode) return false
@@ -483,12 +536,12 @@ extends Iterator[InternalRow] with Logging {
     // Load the next group having data
     while (resultIter.hasNext && oldGroupValue == null && newGroupValue == null) {
       val rowPair = resultIter.next()
-      groupKey = rowPair.key
-      if (deltaOutput) oldGroupValue = stateStoreforResult.getOld(groupKey)
-      if (hashMapforMetaData.getCounter(groupKey) != 0) {
+      globalGroupKey = rowPair.key
+      if (deltaOutput) oldGroupValue = stateStoreforResult.getOld(globalGroupKey)
+      if (hashMapforMetaData.getCounter(globalGroupKey) != 0) {
         newGroupValue = rowPair.value
       } else {
-        stateStoreforResult.remove(groupKey)
+        stateStoreforResult.remove(globalGroupKey)
       }
 
       // GroupValue not change, do not output
@@ -497,7 +550,7 @@ extends Iterator[InternalRow] with Logging {
           oldGroupValue = null
           newGroupValue = null
       } else if (newGroupValue != null) {
-        stateStoreforResult.putOld(groupKey, newGroupValue)
+        stateStoreforResult.putOld(globalGroupKey, newGroupValue)
       }
 
     }
@@ -512,7 +565,7 @@ extends Iterator[InternalRow] with Logging {
 
       // This is an update
       if (oldGroupValue != null && newGroupValue != null) {
-        ret = generateOutput(groupKey, oldGroupValue)
+        ret = generateOutput(globalGroupKey, oldGroupValue)
         ret.setInsert(false)
         ret.setUpdate(true && updateOuput)
         oldGroupValue = null
@@ -521,7 +574,7 @@ extends Iterator[InternalRow] with Logging {
 
         // This is a delete
       } else if (oldGroupValue != null && newGroupValue == null) {
-        ret = generateOutput(groupKey, oldGroupValue)
+        ret = generateOutput(globalGroupKey, oldGroupValue)
         ret.setInsert(false)
         ret.setUpdate(false)
         oldGroupValue = null
@@ -530,7 +583,7 @@ extends Iterator[InternalRow] with Logging {
 
         // This is an insert
       } else if (oldGroupValue == null && newGroupValue != null) {
-        ret = generateOutput(groupKey, newGroupValue)
+        ret = generateOutput(globalGroupKey, newGroupValue)
         ret.setInsert(true)
         ret.setUpdate(false)
         newGroupValue = null
@@ -565,7 +618,8 @@ extends Iterator[InternalRow] with Logging {
   def onCompletion(): Unit = {
     hashMapforResult.free()
 
-    numGroups.set(hashMapforMetaData.getNumKeys)
+    // numGroups.set(hashMapforMetaData.getNumKeys)
+    numGroups += hashMapforMetaData.getNumKeys
 
     hashMapforMetaData.saveToStateStore()
     hashMapforMetaData.commit()

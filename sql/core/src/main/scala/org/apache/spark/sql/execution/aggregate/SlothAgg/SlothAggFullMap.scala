@@ -35,7 +35,8 @@ class SlothAggFullMap(
     var stateInfo: Option[StatefulOperatorStateInfo],
     var storeConf: StateStoreConf,
     var hadoopConf: Configuration,
-    watermarkForData: Option[Predicate]) extends Logging {
+    watermarkForData: Option[Predicate],
+    var clusterID: Int) extends Logging {
 
   private val keySchema = StructType(groupExpressions.zipWithIndex.map {
       case (k, i) => StructField(s"field$i", k.dataType, k.nullable)})
@@ -55,12 +56,18 @@ class SlothAggFullMap(
 
   private var stateStore = getStateStore(keyWithIndexSchema, valSchema)
 
+  def getStoreName(): String = {
+    s"${storeName}-${clusterID}"
+  }
+
   def reInit(stateInfo: Option[StatefulOperatorStateInfo],
              storeConf: StateStoreConf,
-             hadoopConf: Configuration): Unit = {
+             hadoopConf: Configuration,
+             clusterID: Int): Unit = {
     this.stateInfo = stateInfo
     this.storeConf = storeConf
     this.hadoopConf = hadoopConf
+    this.clusterID = clusterID
     stateStore = getStateStore(keyWithIndexSchema, valSchema)
   }
 
@@ -133,7 +140,7 @@ class SlothAggFullMap(
   /** Get the StateStore with the given schema */
   private def getStateStore(keySchema: StructType, valueSchema: StructType): StateStore = {
     val storeProviderId = StateStoreProviderId(
-      stateInfo.get, TaskContext.getPartitionId(), storeName)
+      stateInfo.get, TaskContext.getPartitionId(), getStoreName)
     val store = StateStore.get(
       storeProviderId, keySchema, valueSchema, None,
       stateInfo.get.storeVersion, storeConf, hadoopConf)

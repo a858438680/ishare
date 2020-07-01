@@ -1,0 +1,30 @@
+def execQ20(spark: SparkSession): Unit = {
+
+  val doubleSum = new DoubleSum
+
+  val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
+    .filter($"l_shipdate" between ("1994-01-01", "1994-12-31"))
+  val p = DataUtils.loadStreamTable(spark, "part", "p", tpchSchema)
+    .filter($"p_name" like ("forest%"))
+  val ps = DataUtils.loadStreamTable(spark, "partsupp", "ps", tpchSchema)
+  val s = DataUtils.loadStreamTable(spark, "supplier", "s", tpchSchema)
+  val n = DataUtils.loadStreamTable(spark, "nation", "n", tpchSchema)
+    .filter($"n_name" === "CANADA")
+
+  val agg_l = l
+    .groupBy($"l_partkey", $"l_suppkey")
+    .agg(
+        (doubleSum($"l_quantity") * 0.5).as("agg_l_sum"))
+    .select($"l_partkey".as("agg_l_partkey"), $"l_suppkey".as("agg_l_suppkey"), $"agg_l_sum")
+
+  val subquery = ps
+    .join(agg_l, $"ps_partkey" === $"agg_l_partkey" and $"ps_suppkey" === $"agg_l_suppkey" and $"ps_availqty" > $"agg_l_sum")
+    .join(p, $"ps_partkey" === $"p_partkey", "left_semi")
+    .select($"ps_suppkey")
+
+  return s
+    .join(subquery, $"s_suppkey" === $"ps_suppkey", "left_semi")
+    .join(n, $"s_nationkey" === $"n_nationkey")
+    .select($"s_name", $"s_address")
+
+}

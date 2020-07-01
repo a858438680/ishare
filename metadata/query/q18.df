@@ -1,0 +1,27 @@
+def execQ18(spark: SparkSession): Unit = {
+
+  val doubleSum1 = new DoubleSum
+  val doubleSum2 = new DoubleSum
+
+  val c = DataUtils.loadStreamTable(spark, "customer", "c", tpchSchema)
+  val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
+  val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
+
+  val lb = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
+
+  val agg_l = lb
+    .groupBy($"l_orderkey")
+    .agg(
+        doubleSum1($"l_quantity").as("sum_quantity"))
+    .filter($"sum_quantity" > 300)
+    .select($"l_orderkey".as("agg_orderkey"))
+
+  return l
+    .join(o, $"l_orderkey" === $"o_orderkey")
+    .join(c, $"o_custkey" === $"c_custkey")
+    .join(agg_l, $"o_orderkey" === $"agg_orderkey", "left_semi")
+    .groupBy($"c_name", $"c_custkey", $"o_orderkey", $"o_orderdate", $"o_totalprice")
+    .agg(
+        doubleSum2($"l_quantity").as("sum_quantity"))
+
+}

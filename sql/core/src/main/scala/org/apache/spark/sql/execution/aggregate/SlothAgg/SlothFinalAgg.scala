@@ -165,8 +165,9 @@ class SlothFinalAgg(
     val groupingKey = if (groupingExpressions.isEmpty) {groupingProjection.apply(null)}
                       else {groupingProjection.apply(input)}
     val output = generateOutput(groupingKey, bufferProjection.apply(input))
-    output.setInsert(input.isInsert)
-    output.setUpdate(input.isUpdate)
+
+    val meta = input.getMeta()
+    output.setMeta(meta)
 
     output
   }: InternalRow

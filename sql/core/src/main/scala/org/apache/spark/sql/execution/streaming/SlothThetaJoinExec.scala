@@ -250,18 +250,22 @@ case class SlothThetaJoinExec (
     }
 
     val outputIter = CompletionIterator[InternalRow, Iterator[InternalRow]](
-          leftOutputIter, onLeftCompletion) ++
+          leftOutputIter, onRightCompletion) ++
       CompletionIterator[InternalRow, Iterator[InternalRow]](
-        rightOutputIter, onRightCompletion)
+          rightOutputIter, onLeftCompletion)
 
     val outputProjection = thetaRunTime.outputProj
     val outputIterWithMetrics = outputIter.map { row =>
       numOutputRows += 1
+
       if (row.isUpdate) updateRows += 2
       else if (!row.isInsert) deleteRows += 1
+
       val projectedRow = outputProjection(row)
       projectedRow.setInsert(row.isInsert)
       projectedRow.setUpdate(row.isUpdate)
+      projectedRow.setQidSet(row.getQidSet())
+
       projectedRow
     }
 
@@ -482,13 +486,24 @@ case class SlothThetaJoinExec (
                    generateJoinedRow2: (InternalRow, InternalRow) => JoinedRow) =>
     {
       val key = keyGenerator(thisRow)
+      val keyQidSet = thisRow.getQidSet
       val windowCondition = getWindowCondition(thisRow)
       var outputIter = otherSideJoiner.joinStateManager.
-        getAllAndRemove(windowCondition, removeCondition).map(thatRow => {
+        getAllAndRemove(windowCondition, removeCondition).filter(row => {
+
+        val otherQidSet = row.getQidSet
+        (keyQidSet & otherQidSet) != 0
+
+      }).map(thatRow => {
         if (isInsert && !updateCase) insertOutput += 1
         else if (!isInsert) deleteOutput += 1
         val joinedRow = generateJoinedRow1(thisRow, thatRow)
         joinedRow.setInsert(isInsert)
+
+        // Set qidSet
+        val otherQidSet = thatRow.getQidSet
+        joinedRow.setQidSet(otherQidSet & keyQidSet)
+
         joinedRow
       })
 
@@ -498,11 +513,21 @@ case class SlothThetaJoinExec (
         val insertKey = key
 
         val deleteKey = deleteKeyGenerator(deleteRow)
+        val deleteQidSet = deleteRow.getQidSet
         val deleteWindowCondition = getDeleteWindowCondition(deleteRow)
         val deleteIter = otherSideJoiner.joinStateManager.
-          getAllAndRemove(deleteWindowCondition, removeCondition).
-          map(thatRow => {
+          getAllAndRemove(deleteWindowCondition, removeCondition).filter(row => {
+
+          val otherQidSet = row.getQidSet
+          (deleteQidSet & otherQidSet) != 0
+
+        }).map(thatRow => {
             val joinedRow = generateJoinedRow2(deleteRow, thatRow)
+
+            // Set qidSet
+            val otherQidSet = thatRow.getQidSet
+            joinedRow.setQidSet(otherQidSet & deleteQidSet)
+
             joinedRow
           })
 

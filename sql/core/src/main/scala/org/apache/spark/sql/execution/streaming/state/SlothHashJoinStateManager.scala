@@ -457,6 +457,7 @@ class SlothHashJoinStateManager (
     private def valueWithCounterRow(value: UnsafeRow, counter: Int): UnsafeRow = {
       val row = valueWithCounterRowGenerator(value)
       row.setInt(indexOrdinalInValueWithCounterRow, counter)
+      row.setMeta(value.getMeta)
       row
     }
 
@@ -470,6 +471,7 @@ class SlothHashJoinStateManager (
     def equalWithoutCounter (valueWithCounter: UnsafeRow,
                              valueWithoutCounter: UnsafeRow): Boolean = {
       val row = valueRowGenerator(valueWithCounter)
+      row.setQidSet(valueWithCounter.getQidSet)
       row.equals(valueWithoutCounter)
     }
   }

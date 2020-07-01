@@ -80,9 +80,17 @@ class QueryExecution(val sparkSession: SparkSession, val logical: LogicalPlan) {
     planner.plan(ReturnAnswer(optimizedPlan)).next()
   }
 
+  private def isProjToKafka(projPlan: SlothProjectExec): Boolean = {
+    val projList = projPlan.projectList
+    if (projList.size != 2) return false
+    if (projList(0).name == "key" && projList(1).name == "value") true
+    else false
+  }
+
   private def optimizeProjJoinPattern(plan: SparkPlan): Unit = {
     plan match {
-      case projPlan: ProjectExec if projPlan.children.nonEmpty =>
+      case projPlan: SlothProjectExec
+        if projPlan.children.nonEmpty && !isProjToKafka(projPlan) =>
         if (projPlan.child.isInstanceOf[SlothSymmetricHashJoinExec]) {
           val joinPlan = projPlan.child.asInstanceOf[SlothSymmetricHashJoinExec]
           joinPlan.setPropagateUpdate(projPlan.output)
@@ -172,7 +180,7 @@ class QueryExecution(val sparkSession: SparkSession, val logical: LogicalPlan) {
           SlothUtils.attrIntersect(partAttrs, retUpdateAttrs))
         retUpdateAttrs
 
-      case projExec: ProjectExec =>
+      case projExec: SlothProjectExec =>
         SlothUtils.attrIntersect(getUpdateAttributes(plan.children(0)), projExec.output)
 
       case _ => // FilterExec, DataSourceV2Scan, HashAggFinal, Sort
@@ -385,17 +393,25 @@ class QueryExecution(val sparkSession: SparkSession, val logical: LogicalPlan) {
     plan match {
       case filter: SlothFilterExec =>
         val predInfo = SubQueryInfo.extractPredInfo(filter.condition.toString)
-        val qid =
-          if (predInfo == null) -1
+        val qidArray =
+          if (predInfo == null) new Array[Int](0)
           else {
-            subQueryInfo.getPredQid(predInfo)
+            subQueryInfo.getPredQidArray(predInfo)
           }
-        filter.subQID = qid
+        filter.subQIDArray = qidArray
 
       case source: DataSourceV2ScanExec =>
         source.qidSet = subQueryInfo.extractQidSet()
+
       case agg: SlothHashAggregateExec =>
         agg.setAggQidCluster(subQueryInfo.aggQidCluster)
+
+      // We do not share non-inner join
+      // and qid is only used for the non-inner join,
+      // so we assume that the first qid is the one we need
+      case join: SlothSymmetricHashJoinExec =>
+        join.setQid(subQueryInfo.qidArray(0))
+
       case _ =>
     }
     plan.children.foreach(child => annotateShareInfo(subQueryInfo, child))

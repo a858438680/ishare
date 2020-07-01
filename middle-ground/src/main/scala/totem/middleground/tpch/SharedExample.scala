@@ -26,6 +26,7 @@ import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.avro.{from_avro, SchemaConverters}
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.sqpmeta.SubQueryInfo
 import org.apache.spark.sql.sqpnetwork.MetaServer
 import org.apache.spark.sql.types.StructType
 
@@ -122,8 +123,8 @@ class CandidateQuery (query_name: String, uid: String, numBatch: String, constra
   val shareSchema = new StructType()
     .add("l_partkey", "long")
     .add("avg_quantity", "double")
-    .add("p_size", "int")
-    .add("p_brand", "string")
+    // .add("p_size", "int")
+    // .add("p_brand", "string")
     // .add("l_partkey", "long")
     // .add("l_quantity", "double")
     // .add("l_returnflag", "string")
@@ -339,9 +340,13 @@ class CandidateQuery (query_name: String, uid: String, numBatch: String, constra
     val p = DataUtils.loadStreamTable(spark, "part", "p", tpchSchema)
     val ps = DataUtils.loadStreamTable(spark, "partsupp", "ps", tpchSchema)
 
-    val tmpResult = p.join(agg_l, $"p_partkey" === $"l_partkey")
-    val result = ps
-      .join(tmpResult, $"ps_partkey" === $"l_partkey")
+    // val tmpResult = p.join(agg_l, $"p_partkey" === $"l_partkey")
+    // val result = ps
+    //   .join(tmpResult, $"ps_partkey" === $"l_partkey")
+    //   .agg((doubleSum($"avg_quantity") / 7.0).as("avg_yearly"))
+
+    val result = agg_l.join(p, $"l_partkey" === $"p_partkey")
+        .join(ps, $"l_partkey" === $"ps_partkey")
       .agg((doubleSum($"avg_quantity") / 7.0).as("avg_yearly"))
 
     // result.explain(true)
@@ -360,9 +365,12 @@ class CandidateQuery (query_name: String, uid: String, numBatch: String, constra
       .filter($"l_shipdate" <= "1994-01-01")
       .groupBy($"l_partkey")
       .agg((doubleAvg($"l_quantity") * 0.2).as("avg_quantity"))
+
     val p = DataUtils.loadStreamTable(spark, "part", "p", tpchSchema)
-    val result = p.join(agg_l, $"p_partkey" === $"l_partkey")
-      .select($"l_partkey", $"avg_quantity", $"p_size", $"p_brand")
+      .filter($"p_size" === 1 and $"p_brand" === "Brand#13")
+
+    val result = agg_l.join(p, $"l_partkey" === $"p_partkey")
+     .select($"l_partkey", $"avg_quantity")
 
     val unique_query_name = query_name + "_" + uid
     DataUtils.writeToKafkaWithExtraOptions(
@@ -376,7 +384,6 @@ class CandidateQuery (query_name: String, uid: String, numBatch: String, constra
     val doubleSum = new DoubleSum
 
     val share_join = loadSharedTable(spark)
-      .filter($"p_size" === 1 and $"p_brand" === "Brand#13")
 
     val result = share_join.agg(
       doubleSum($"avg_quantity").as("sum quantity"))
@@ -413,7 +420,7 @@ class CandidateQuery (query_name: String, uid: String, numBatch: String, constra
 
     val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
 
-    val result = l.filter($"l_shipdate" <= "1993-09-01")
+    val result = l.filter($"l_shipdate" =!= "1993-09-01" or $"l_quantity" <= 10.0)
       .filter($"l_quantity" <= 10.0)
       .filter($"l_quantity" === 10.0)
       .filter($"l_quantity" =!= 10.0)
@@ -440,7 +447,8 @@ class CandidateQuery (query_name: String, uid: String, numBatch: String, constra
 class ServerThread (numSubQ: Int, port: Int,
                     qnames: Array[String],
                     numBatchArray: Array[Int],
-                    dependency: HashMap[Int, HashSet[Int]]) extends Thread {
+                    dependency: HashMap[Int, HashSet[Int]],
+                    queryInfo: Array[SubQueryInfo]) extends Thread {
 
   private val MAX_BATCH_NUM = 100
   private val server = new MetaServer(numSubQ, port)
@@ -449,6 +457,8 @@ class ServerThread (numSubQ: Int, port: Int,
   private val totalTime = new Array[Double](numBatchArray.length)
   private val finalTime = new Array[Double](numBatchArray.length)
   private val initialStartupTime = 3000.0
+
+  server.loadSharedQueryInfo(queryInfo)
 
   for (idx <- batchIDArray.indices) batchIDArray(idx) = 0
 
@@ -551,24 +561,24 @@ class ServerThread (numSubQ: Int, port: Int,
 }
 
 private object AloneConfig {
-  // val queryNames = Array("q5_alone", "q6_alone")
-  // val numBatches = Array(40, 1)
-  // val constraints = Array("0.5", "0.05")
-  // val numSubQ = 2
-  // val tpchSchemas = new Array[TPCHSchema](numSubQ)
-  // val sharetopic = ""
-
-  val queryNames = Array("q7")
-  val numBatches = Array(20)
-  val constraints = Array("0.05")
-  val numSubQ = 1
+  val queryNames = Array("q5_alone", "q6_alone")
+  val numBatches = Array(2, 2)
+  val constraints = Array("0.5", "0.05")
+  val numSubQ = 2
   val tpchSchemas = new Array[TPCHSchema](numSubQ)
   val sharetopic = ""
+
+  // val queryNames = Array("q7")
+  // val numBatches = Array(20)
+  // val constraints = Array("0.05")
+  // val numSubQ = 1
+  // val tpchSchemas = new Array[TPCHSchema](numSubQ)
+  // val sharetopic = ""
 }
 
 private object ShareConfig {
   val queryNames = Array("q5_sep", "q6_sep", "q56_share")
-  val numBatches = Array(50, 1, 50)
+  val numBatches = Array(2, 2, 2)
   val constraints = Array("0.5", "0.05", "0.01")
   val numSubQ = 3
   val tpchSchemas = new Array[TPCHSchema](numSubQ)
@@ -650,7 +660,12 @@ class SharedExample (bootstrap: String, shuffleNum: String, statDIR: String, SF:
     queries(idx) = candidateQuery
   }
 
-  private val serverThread = new ServerThread(numSubQ, port, queryNames, numBatches, dependency)
+  private val queryInfo =
+    if (isShare) ExampleQueryInfo.getShareSubQueryInfo
+    else ExampleQueryInfo.getSepSubQueryInfo
+
+  private val serverThread =
+    new ServerThread(numSubQ, port, queryNames, numBatches, dependency, queryInfo)
 
   private def createSharedTopic(): Unit = {
     val commandStr = s"$kafkaCommand -zookeeper $zookeeper --create " +

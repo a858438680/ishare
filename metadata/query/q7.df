@@ -1,0 +1,30 @@
+def execQ7(spark: SparkSession): Unit = {
+
+  val sum_disc_price = new Sum_disc_price
+
+  val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
+    .filter($"l_shipdate" between ("1995-01-01", "1996-12-31"))
+  val s = DataUtils.loadStreamTable(spark, "supplier", "s", tpchSchema)
+  val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
+  val c = DataUtils.loadStreamTable(spark, "customer", "c", tpchSchema)
+  val n1Raw = DataUtils.loadStreamTable(spark, "nation", "n1", tpchSchema)
+  val n2Raw = DataUtils.loadStreamTable(spark, "nation", "n2", tpchSchema)
+
+  val n1 = n1Raw
+    .select($"n_name".as("supp_nation"), $"n_nationkey".as("n1_nationkey"))
+
+  val n2 = n2Raw
+    .select($"n_name".as("cust_nation"), $"n_nationkey".as("n2_nationkey"))
+
+  return l
+    .join(o, $"l_orderkey" === $"o_orderkey")
+    .join(c, $"o_custkey" === $"c_custkey")
+    .join(s, $"l_suppkey" === $"s_suppkey")
+    .join(n1, $"s_nationkey" === $"n1_nationkey")
+    .join(n2, $"c_nationkey" === $"n2_nationkey")
+    .filter(($"supp_nation" === "FRANCE" and $"cust_nation" === "GERMANY") or ($"supp_nation" === "GERMANY" and $"cust_nation" === "FRANCE"))
+    .select($"supp_nation", $"cust_nation", year($"l_shipdate").as("l_year"), $"l_extendedprice", $"l_discount")
+    .groupBy($"supp_nation", $"cust_nation", $"l_year")
+    .agg(
+      sum_disc_price($"l_extendedprice", $"l_discount").as("revenue"))
+}

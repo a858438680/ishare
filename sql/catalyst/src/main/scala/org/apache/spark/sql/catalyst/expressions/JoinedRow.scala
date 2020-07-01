@@ -31,6 +31,7 @@ class JoinedRow extends InternalRow {
   private[this] var row2: InternalRow = _
   private[this] var insert: Boolean = true
   private[this] var update: Boolean = false
+  private[this] var qidSet: Long = 0L
 
   def this(left: InternalRow, right: InternalRow) = {
     this()
@@ -188,4 +189,20 @@ class JoinedRow extends InternalRow {
   override def isUpdate(): Boolean = {
     this.update
   }
+
+  override def setQidSet(qidSet: Long): Unit = {
+    this.qidSet = qidSet
+  }
+
+  override def clearQidSet(): Unit = {
+    qidSet = 0L
+  }
+
+  override def setQidValid(qid: Int, valid: Boolean): Unit = {
+    if (valid) qidSet = qidSet | (1L << qid)
+    else qidSet = qidSet & (~(1L << qid))
+  }
+
+  override def getQidSet: Long = qidSet
+
 }

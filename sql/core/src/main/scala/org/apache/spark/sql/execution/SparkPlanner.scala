@@ -104,7 +104,11 @@ class SparkPlanner(
       filterCondition.map(FilterExec(_, scan)).getOrElse(scan)
     } else {
       val scan = scanBuilder((projectSet ++ filterSet).toSeq)
-      ProjectExec(projectList, filterCondition.map(FilterExec(_, scan)).getOrElse(scan))
+      if (SlothDBContext.enable_slothdb) {
+        SlothProjectExec(projectList, filterCondition.map(FilterExec(_, scan)).getOrElse(scan))
+      } else {
+        ProjectExec(projectList, filterCondition.map(FilterExec(_, scan)).getOrElse(scan))
+      }
     }
   }
 }

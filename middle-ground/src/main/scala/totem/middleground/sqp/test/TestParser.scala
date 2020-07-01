@@ -15,37 +15,22 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.sqpnetwork
+// scalastyle:off println
 
-import org.apache.spark.sql.sqpmeta.SubQueryInfo
+package totem.middleground.sqp.test
 
-class MetaMessage (val uid: Int) extends Serializable {}
+import totem.middleground.sqp.Parser
+import totem.middleground.sqp.Utils
 
-class PlanMessage (override val uid: Int, val baseQuery: Boolean)
-  extends MetaMessage (uid) {
+object TestParser {
 
-  private var subQueryInfo: SubQueryInfo = null
+  def main(args: Array[String]): Unit = {
+    if (args.length < 2) {
+      System.err.println("Usage: TestParser [Path to DF file] [Qid]")
+      System.exit(1)
+    }
 
-  def setSubQInfo(inputSubQInfo: SubQueryInfo): Unit = {
-    this.subQueryInfo = inputSubQInfo
-  }
-
-  def getSubQInfo(): SubQueryInfo = {
-    subQueryInfo
-  }
-}
-
-class ExecMessage (override val uid: Int, val execute: Boolean)
-  extends MetaMessage (uid) {}
-
-class StatMessage (override val uid: Int)
-  extends MetaMessage (uid) {
-
-  var batchID = 0
-  var execTime = 0.0
-
-  def setStateInfo(inputBatchID: Int, inputExecTime: Double): Unit = {
-    batchID = inputBatchID
-    execTime = inputExecTime
+    val subQuery = Parser.parseQuery(args(0), args(1).toInt)
+    Utils.printPlanGraph(Array(subQuery))
   }
 }

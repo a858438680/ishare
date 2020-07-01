@@ -252,6 +252,11 @@ case class SlothSymmetricHashJoinExec(
     rightPropagateUpdate = SlothUtils.attrIntersect(rightNonKeyAttrs, parentProjOutput).nonEmpty
   }
 
+  private[this] var qid = 0
+  def setQid(qid: Int): Unit = {
+    this.qid = qid
+  }
+
   protected override def doExecute(): RDD[InternalRow] = {
     val stateStoreCoord = sqlContext.sessionState.streamingQueryManager.stateStoreCoordinator
     val stateStoreNames = SlothHashJoinStateManager.allStateStoreNames(LeftSide, RightSide)
@@ -384,6 +389,7 @@ case class SlothSymmetricHashJoinExec(
     val outputIter: Iterator[InternalRow] = joinType match {
       case Inner | LeftSemi =>
         wrapLeftInnerIter ++ wrapRightInnerIter
+        // wrapRightInnerIter ++ wrapLeftInnerIter
       case LeftOuter | LeftAnti =>
         // Run right iterator first
         wrapRightInnerIter ++ wrapLeftInnerIter
@@ -410,11 +416,22 @@ case class SlothSymmetricHashJoinExec(
     val outputProjection = hashRunTime.outputProj
     val outputIterWithMetrics = outputIter.map { row =>
       numOutputRows += 1
+
       if (row.isUpdate) updateRows += 2
       else if (!row.isInsert) deleteRows += 1
+
       val projectedRow = outputProjection(row)
       projectedRow.setInsert(row.isInsert)
       projectedRow.setUpdate(row.isUpdate && updateOutput)
+
+      // Note we only share inner join
+      if (joinType == Inner) {
+        projectedRow.setQidSet(row.getQidSet())
+      } else {
+        projectedRow.clearQidSet()
+        projectedRow.setQidValid(qid, true)
+      }
+
       projectedRow
     }
 
@@ -754,6 +771,104 @@ case class SlothSymmetricHashJoinExec(
         return false
       }
     }
+
+    private val InnerOnlyJoinOneRow = (thisRow: UnsafeRow,
+                   deleteRow: UnsafeRow,
+                   isInsert: Boolean,
+                   updateCase: Boolean,
+                   otherSideJoiner: OneSideHashJoiner,
+                   generateJoinedRow1: (InternalRow, InternalRow) => JoinedRow,
+                   generateJoinedRow2: (InternalRow, InternalRow) => JoinedRow) =>
+    {
+      val key = keyGenerator(thisRow)
+      val keyQidSet = thisRow.getQidSet
+
+      // generate iterator over matched tuple pairs for inner join parts
+      // Note that the iterator is executed after the states are updated
+      // (i.e. insert to/delete from the hash table)
+      val innerIter = otherSideJoiner.joinStateManager.getAll(key).filter(row => {
+        val otherQidSet = row.getQidSet
+        (keyQidSet & otherQidSet) != 0
+      }).map{thatRowWithCounter => {
+         val joinedRow =
+           generateJoinedRow1(thisRow, otherSideJoiner.getRawValue(thatRowWithCounter))
+         // Set Qidset
+         val otherQidSet = thatRowWithCounter.getQidSet
+         val qidSet = (keyQidSet & otherQidSet)
+         joinedRow.setQidSet(qidSet)
+
+         joinedRow.setInsert(isInsert)
+
+         if (isInsert && !updateCase) insertOutput += 1
+         else deleteOutput += 1
+
+         joinedRow
+      }}
+
+      var totalIter: Iterator[JoinedRow] = Iterator()
+
+      if (updateCase) {
+        val insertKey = key
+        val insertIter = innerIter
+        val insertRow = thisRow
+
+        val deleteKey = deleteKeyGenerator(deleteRow)
+        val deleteQidSet = deleteRow.getQidSet
+        val deleteIter = otherSideJoiner.joinStateManager.getAll(deleteKey).filter(row => {
+          val otherQidSet = row.getQidSet
+          (deleteQidSet & otherQidSet) != 0
+        }).map{thatRowWithCounter => {
+            val joinedRow =
+              generateJoinedRow2(deleteRow, otherSideJoiner.getRawValue(thatRowWithCounter))
+            // Set Qidset
+            val otherQidSet = thatRowWithCounter.getQidSet
+            val qidSet = (deleteQidSet & otherQidSet)
+            joinedRow.setQidSet(qidSet)
+            joinedRow.setInsert(false)
+            otherSideJoiner.decCounter(thatRowWithCounter)
+            joinedRow
+        }}
+
+        // Updates on keys, concatenate the two lists together
+        if (!insertKey.equals(deleteKey)) {
+
+          totalIter = (deleteIter ++ insertIter)
+            .filter(postJoinFilter)
+            .map(joinedRow => {
+              updateOutput += 1
+              joinedRow
+            })
+
+        } else { // Updates on non-key columns, counters unchanged
+
+          totalIter = generateUpdateIter(deleteIter, insertIter, postJoinFilter)
+              .map(joinedRow => {
+                updateOutput += 1
+                joinedRow
+              })
+        }
+
+        updatedStateRowsCount += 2
+        joinStateManager.remove(deleteKey, deleteRow)
+        joinStateManager.append(insertKey, insertRow)
+
+      } else {
+        if (isInsert) {
+
+          totalIter = innerIter.filter(postJoinFilter)
+          joinStateManager.append(key, thisRow)
+
+        } else {
+
+          totalIter = innerIter.filter(postJoinFilter)
+          joinStateManager.remove(key, thisRow)
+        }
+
+        updatedStateRowsCount += 1
+      }
+
+      totalIter
+    }: Iterator[JoinedRow]
 
     private val InnerPlusOuterJoinOneRow = (thisRow: UnsafeRow,
                    deleteRow: UnsafeRow,
@@ -1204,7 +1319,9 @@ case class SlothSymmetricHashJoinExec(
       (InternalRow, InternalRow) => JoinedRow, (InternalRow, InternalRow) => JoinedRow)
       => Iterator[JoinedRow] = {
       joinType match {
-        case Inner | LeftOuter | RightOuter | FullOuter =>
+        case Inner =>
+          InnerOnlyJoinOneRow
+        case LeftOuter | RightOuter | FullOuter =>
           InnerPlusOuterJoinOneRow
         case LeftSemi =>
           LeftSemiJoinOneRow

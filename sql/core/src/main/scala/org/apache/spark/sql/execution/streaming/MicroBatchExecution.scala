@@ -229,7 +229,7 @@ class MicroBatchExecution(
     //   else null
     if (client != null) {
       client.startClient()
-      subQueryInfo = client.getPlanMessage().getPredInfo
+      subQueryInfo = client.getPlanMessage().getSubQInfo
     }
 
     triggerExecutor.execute(() => {

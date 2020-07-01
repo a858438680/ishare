@@ -1,0 +1,16 @@
+def execQ4(spark: SparkSession): Unit = {
+
+  val order_count = new Count
+
+  val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
+    .filter($"o_orderdate" between ("1993-07-01", "1993-10-01"))
+
+  val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
+    .filter($"l_commitdate" < $"l_receiptdate")
+
+  return o
+    .join(l, $"o_orderkey" === $"l_orderkey", "left_semi")
+    .groupBy($"o_orderpriority")
+    .agg(
+      order_count(lit(1L)).as("order_count"))
+}

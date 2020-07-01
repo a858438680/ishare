@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.sqpmeta
 
+import scala.collection.mutable.ArrayBuffer
+
 case class SubQueryInfo (qidArray: Array[Int],
                          predInfoArray: Array[PredInfo],
                          aggQidCluster: Array[Long]) {
@@ -29,15 +31,16 @@ case class SubQueryInfo (qidArray: Array[Int],
     qidSet
   }
 
-  def getPredQid(predInfo: PredInfo): Int = {
+  def getPredQidArray(predInfo: PredInfo): Array[Int] = {
+    val qidBuf = ArrayBuffer[Int]()
     val predStr = predInfo.toString
     predInfoArray.foreach(tmpInfo => {
       if (tmpInfo.toString.compareToIgnoreCase(predStr) == 0) {
-        return tmpInfo.qid
+        qidBuf.append(tmpInfo.qid)
       }
     })
 
-    -1
+    qidBuf.toArray
   }
 }
 
@@ -49,7 +52,50 @@ case class PredInfo (qid: Int, left: String, op: String, right: String) {
 
 object SubQueryInfo {
 
-  def extractPredInfo(conditionStr: String): PredInfo = {
+  private val andString = " && "
+  private val orString = " || "
+
+  private def countCommonString(commonStr: String, conditionStr: String): Int = {
+    var count = 0
+    var lastIndex = 0
+    while (lastIndex != -1) {
+      lastIndex = conditionStr.indexOf(commonStr, lastIndex)
+      if (lastIndex != -1) {
+        count += 1
+        lastIndex += commonStr.length
+      }
+    }
+    count
+  }
+
+  private def endIndexOfFirstPred(conditionStr: String): Int = {
+    val andIdx = conditionStr.indexOf(andString, 0)
+    val orIdx = conditionStr.indexOf(orString, 0)
+    if (orIdx == -1 && andIdx == -1) {
+      -1
+    } else if (orIdx == -1) {
+      andIdx
+    } else if (andIdx == -1) {
+      orIdx
+    } else {
+      math.min(orIdx, andIdx)
+    }
+  }
+
+  private def extractFirstPredString(conditionStr: String): String = {
+    val numSubPred =
+      countCommonString(andString, conditionStr) + countCommonString(orString, conditionStr) + 1
+
+    if (numSubPred == 1) return conditionStr
+
+    val startIndex = numSubPred - 1
+    val endIndex = endIndexOfFirstPred(conditionStr)
+    conditionStr.substring(startIndex, endIndex)
+  }
+
+  def extractPredInfo(inputConditionStr: String): PredInfo = {
+    val conditionStr = extractFirstPredString(inputConditionStr)
+
     val not = conditionStr.startsWith("NOT")
 
     val dotIdx = conditionStr.lastIndexOf(").")
@@ -59,13 +105,13 @@ object SubQueryInfo {
     val predStrArray = predStr.split("\\s+")
     if (predStrArray.length == 3) {
       val left = predStrArray(0)
-      val right = predStrArray(1)
+      val right = predStrArray(2)
       val op =
         if (predStrArray(1).compareTo("=") == 0 && not) "!="
         else predStrArray(1)
 
       PredInfo(-1, left, op, right)
-    } else if (predStrArray.length == 5) {
+    } else if (predStrArray.length == 5) { // this is the case for date comparison
       val left = predStrArray(0)
       val right = predStrArray(4)
       val op =

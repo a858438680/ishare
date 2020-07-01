@@ -89,12 +89,12 @@ case class SlothHashAggregateExec (
     new SerializableConfiguration(SessionState.newHadoopConf(
       sparkContext.hadoopConfiguration, sqlContext.conf)))
 
-  private[this] var aggIter: SlothAggregationIterator = _
+  private[this] var aggIterArray: Array[SlothAggregationIterator] = _
 
   private[this] def onCompletion: Unit = {
     val commitTimeMs = longMetric("commitTimeMs")
     commitTimeMs.set(timeTakenMs{
-      if (aggIter != null) aggIter.onCompletion()
+      if (aggIterArray != null) aggIterArray.foreach(_.onCompletion())
     })
   }
 
@@ -109,31 +109,71 @@ case class SlothHashAggregateExec (
       val numGroups = longMetric("numGroups")
 
       val beforeAgg = System.nanoTime()
-      val resIter =
-        new SlothAggregationIterator(
-          partIndex,
-          groupingExpressions,
-          aggregateExpressions,
-          aggregateAttributes,
-          resultExpressions,
-          (expressions, inputSchema) =>
-            newMutableProjection(expressions, inputSchema, subexpressionEliminationEnabled),
-          child.output,
-          iter,
-          numOutputRows,
-          deleteRows,
-          updateRows,
-          stateMemory,
-          numGroups,
-          stateInfo,
-          storeConf,
-          hadoopConfBcast.value.value,
-          watermarkPredicateForKeys,
-          watermarkPredicateForData,
-          deltaOutput,
-          updateOutput,
-          repairMode)
-      aggIter = resIter
+      val resIterArray =
+        for (clusterID <- qidCluster.indices) yield {
+          new SlothAggregationIterator(
+            partIndex,
+            groupingExpressions,
+            aggregateExpressions,
+            aggregateAttributes,
+            resultExpressions,
+            (expressions, inputSchema) =>
+              newMutableProjection(expressions, inputSchema, subexpressionEliminationEnabled),
+            child.output,
+            iter,
+            numOutputRows,
+            deleteRows,
+            updateRows,
+            stateMemory,
+            numGroups,
+            stateInfo,
+            storeConf,
+            hadoopConfBcast.value.value,
+            watermarkPredicateForKeys,
+            watermarkPredicateForData,
+            deltaOutput,
+            updateOutput,
+            repairMode,
+            clusterID)
+        }
+
+
+      if (groupingExpressions.isEmpty && iter.hasNext) {
+        while (iter.hasNext) {
+          val newInput = iter.next()
+          resIterArray.foreach(clusterIter => {
+            val clusterID = clusterIter.getClusterID
+            if ((qidCluster(clusterID) & newInput.getQidSet()) != 0L) {
+              clusterIter.processSingleGroupInput(newInput)
+            }
+          })
+        }
+      } else {
+        while (iter.hasNext) {
+          val newInput = iter.next()
+          resIterArray.foreach(clusterIter => {
+            val clusterID = clusterIter.getClusterID
+            if ((qidCluster(clusterID) & newInput.getQidSet()) != 0L) {
+              clusterIter.processMultiGroupInput(newInput)
+            }
+          })
+        }
+      }
+
+      aggIterArray = resIterArray.toArray
+      var resIter: Iterator[InternalRow] = null
+      resIterArray.foreach(oneIter => {
+        oneIter.postProcessInput()
+        val qidSet = qidCluster(oneIter.getClusterID)
+        val iterWithQidSet =
+          oneIter.map(row => {
+            row.setQidSet(qidSet)
+            row
+          })
+        if (resIter == null) resIter = iterWithQidSet
+        else resIter = resIter ++ iterWithQidSet
+      })
+
       aggTimeMs += (System.nanoTime() - beforeAgg) / 1000000
       CompletionIterator[InternalRow, Iterator[InternalRow]](resIter, onCompletion)
     }

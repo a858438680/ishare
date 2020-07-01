@@ -45,11 +45,12 @@ class SlothAggMetaMap (
     storeConf: StateStoreConf,
     hadoopConf: Configuration,
     watermarkForKey: Option[Predicate],
-    repairMode: Boolean) {
+    repairMode: Boolean,
+    clusterID: Int) {
 
   private var hashMap = HashMap.empty[UnsafeRow, AggMetaData]
   private val metaStore = new GroupKeytoMetaStore(groupExpressions,
-    stateInfo, storeConf, hadoopConf, watermarkForKey, repairMode)
+    stateInfo, storeConf, hadoopConf, watermarkForKey, repairMode, clusterID)
   private val counterIndex = 0
   private val maxIdIndex = 1
   private val hasChangeIndex = 2
@@ -57,9 +58,10 @@ class SlothAggMetaMap (
   def reInit(stateInfo: Option[StatefulOperatorStateInfo],
              storeConf: StateStoreConf,
              hadoopConf: Configuration,
-             repairMode: Boolean): Unit = {
+             repairMode: Boolean,
+             clusterID: Int): Unit = {
     hashMap = HashMap.empty[UnsafeRow, AggMetaData]
-    metaStore.reInit(stateInfo, storeConf, hadoopConf, repairMode)
+    metaStore.reInit(stateInfo, storeConf, hadoopConf, repairMode, clusterID)
   }
 
   def purge(): Unit = {
@@ -184,9 +186,14 @@ class SlothAggMetaMap (
     var storeConf: StateStoreConf,
     var hadoopConf: Configuration,
     watermarkForKey: Option[Predicate],
-    repairMode: Boolean) extends Logging {
+    repairMode: Boolean,
+    var clusterID: Int) extends Logging {
 
-    private val storeName = "GroupKeytoMetaStore"
+    private val storeName = s"GroupKeytoMetaStore"
+
+    private def getStoreName(): String = {
+      s"$storeName-$clusterID"
+    }
 
     private val keySchema = StructType(
       groupExpression.zipWithIndex
@@ -204,10 +211,12 @@ class SlothAggMetaMap (
     def reInit(stateInfo: Option[StatefulOperatorStateInfo],
                storeConf: StateStoreConf,
                hadoopConf: Configuration,
-               repairMode: Boolean): Unit = {
+               repairMode: Boolean,
+               clusterID: Int): Unit = {
       this.stateInfo = stateInfo
       this.storeConf = storeConf
       this.hadoopConf = hadoopConf
+      this.clusterID = clusterID
       stateStore = getStateStore(keySchema, valSchema)
     }
 
@@ -279,7 +288,7 @@ class SlothAggMetaMap (
     /** Get the StateStore with the given schema */
     private def getStateStore(keySchema: StructType, valueSchema: StructType): StateStore = {
       val storeProviderId = StateStoreProviderId(
-        stateInfo.get, TaskContext.getPartitionId(), storeName)
+        stateInfo.get, TaskContext.getPartitionId(), getStoreName())
       val store = StateStore.get(
         storeProviderId, keySchema, valueSchema, None,
         stateInfo.get.storeVersion, storeConf, hadoopConf)

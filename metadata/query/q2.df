@@ -1,0 +1,45 @@
+def execQ2(spark: SparkSession): Unit = {
+
+  val p = DataUtils.loadStreamTable(spark, "part", "p", tpchSchema)
+    .filter(($"p_size" === 15) and ($"p_type" like ("%BRASS")))
+  val s = DataUtils.loadStreamTable(spark, "supplier", "s", tpchSchema)
+  val ps = DataUtils.loadStreamTable(spark, "partsupp", "ps", tpchSchema)
+  val n = DataUtils.loadStreamTable(spark, "nation", "n", tpchSchema)
+  val r = DataUtils.loadStreamTable(spark, "region", "r", tpchSchema)
+    .filter($"r_name" === "EUROPE")
+
+  val subquery1_a = r
+    .join(n, $"r_regionkey" === $"n_regionkey")
+    .join(s, $"n_nationkey" === $"s_nationkey")
+
+  val subquery1_b = ps
+    .join(p, $"ps_partkey" === $"p_partkey")
+
+  val subquery1 = subquery1_a
+    .join(subquery1_b, $"s_suppkey" === $"ps_suppkey")
+
+  val subquery2 = execQ2_subquery(spark)
+
+  return subquery1
+    .join(subquery2, ($"p_partkey" ===  $"min_partkey") and ($"ps_supplycost" === $"min_supplycost"))
+    .select($"s_acctbal", $"s_name", $"n_name", $"p_partkey", $"p_mfgr", $"s_address", $"s_phone", $"s_comment")
+}
+
+def execQ2_subquery(spark: SparkSession): DataFrame = {
+
+  val s = DataUtils.loadStreamTable(spark, "supplier", "s", tpchSchema)
+  val ps = DataUtils.loadStreamTable(spark, "partsupp", "ps", tpchSchema)
+
+  val n = DataUtils.loadStreamTable(spark, "nation", "n", tpchSchema)
+  val r = DataUtils.loadStreamTable(spark, "region", "r", tpchSchema)
+    .filter($"r_name" === "EUROPE")
+
+  return r
+    .join(n, $"r_regionkey" === $"n_regionkey")
+    .join(s, $"n_nationkey" === $"s_nationkey")
+    .join(ps, $"s_suppkey" === $"ps_suppkey")
+    .groupBy($"ps_partkey")
+    .agg(
+      min($"ps_supplycost").as("min_supplycost"))
+    .select($"ps_partkey".as("min_partkey"), $"min_supplycost")
+}

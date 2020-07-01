@@ -1,0 +1,19 @@
+def execQ3(spark: SparkSession): Unit = {
+
+  val sum_disc_price = new Sum_disc_price
+
+  val c = DataUtils.loadStreamTable(spark, "customer", "c", tpchSchema)
+    .filter($"c_mktsegment" === "BUILDING")
+  val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
+    .filter($"o_orderdate" < "1995-03-15")
+  val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
+    .filter($"l_shipdate" > "1995-03-15")
+
+  return c
+    .join(o, $"c_custkey" === $"o_custkey")
+    .join(l, $"o_orderkey" === $"l_orderkey")
+    .groupBy($"l_orderkey", $"o_orderdate", $"o_shippriority")
+    .agg(
+      sum_disc_price($"l_extendedprice", $"l_discount").as("revenue"))
+    .select($"l_orderkey", $"revenue", $"o_orderdate", $"o_shippriority")
+}

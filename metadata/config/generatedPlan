@@ -1,0 +1,289 @@
+Root of Q21
+	Agg [s_name] [numwait -> lit(1L)] [21]
+		Join ($"l_orderkey" === $"l3_orderkey") and  ($"l_suppkey" =!= $"l3_suppkey") left_anti [21]
+			Join ($"l_orderkey" === $"l2_orderkey") and  ($"l_suppkey" =!= $"l2_suppkey") left_semi [21]
+				Join $"s_nationkey" === $"n_nationkey" inner [21]
+					Join $"l_suppkey" === $"s_suppkey" inner [21]
+						Join $"l_orderkey" === $"o_orderkey" inner [21]
+							Mat Filter [l_receiptdate > l_commitdate] [15, 19, 6, 21, 14] [21]
+							Filter [o_orderstatus === "F"] [21] [21]
+								Scan orders [21]
+						Scan supplier [21]
+					Mat Filter [n_name === "SAUDI ARABIA"] [20, 21, 11] [21]
+				Select Out: [l2_suppkey, l2_orderkey] Alias: [l2_orderkey -> l_orderkey; l2_suppkey -> l_suppkey] [21]
+					Mat Filter [l_receiptdate > l_commitdate] [15, 19, 6, 21, 14] [21]
+			Select Out: [l3_orderkey, l3_suppkey] Alias: [l3_suppkey -> l_suppkey; l3_orderkey -> l_orderkey] [21]
+				Mat Filter [l_receiptdate > l_commitdate] [15, 19, 6, 21, 14] [21]
+==========================
+Root of Q1
+	Agg [l_linestatus, l_returnflag] [sum_base_price -> l_extendedprice,l_discount; avg_disc -> l_discount; sum_qty -> l_quantity; avg_qty -> l_quantity; sum_disc_price -> l_extendedprice,l_discount; count_order -> lit(1L); avg_price -> l_extendedprice; sum_charge -> l_extendedprice,l_tax,l_discount] [1]
+		Filter [l_shipdate <= "1998-09-01"] [1] [1]
+			Scan lineitem [1]
+==========================
+Root of Q2
+	Select Out: [s_name, s_acctbal, s_address, s_comment, n_name, p_mfgr, s_phone, p_partkey] Alias: [] [2]
+		Join ($"p_partkey" === $"min_partkey") and  ($"ps_supplycost" === $"min_supplycost") inner [2]
+			Join $"s_suppkey" === $"ps_suppkey" inner [2]
+				Mat Join $"n_nationkey" === $"s_nationkey" inner [5, 2]
+				Mat Join $"ps_partkey" === $"p_partkey" inner [16, 2]
+			Agg [ps_partkey] [min_partkey -> ps_partkey,min_supplycost; min_supplycost -> ps_supplycost] [2]
+				Join $"s_suppkey" === $"ps_suppkey" inner [2]
+					Mat Join $"n_nationkey" === $"s_nationkey" inner [5, 2]
+					Scan partsupp [2]
+==========================
+Root of Q3
+	Select Out: [revenue, o_orderdate, o_shippriority, l_orderkey] Alias: [] [3]
+		Agg [o_orderdate, o_shippriority, l_orderkey] [revenue -> l_extendedprice,l_discount] [3]
+			Join $"o_orderkey" === $"l_orderkey" inner [3]
+				Join $"c_custkey" === $"o_custkey" inner [3]
+					Mat Filter [c_mktsegment === "BUILDING"] [3, 22] [3]
+					Filter [o_orderdate < "1995-03-15"] [3] [3]
+						Scan orders [3]
+				Filter [l_shipdate > "1995-03-15"] [3] [3]
+					Scan lineitem [3]
+==========================
+Root of Q4
+	Agg [o_orderpriority] [order_count -> lit(1L)] [4]
+		Join $"o_orderkey" === $"l_orderkey" left_semi [4]
+			Mat Filter [o_orderdate between ("1993-07-01", "1993-10-01")] [9, 13, 5, 18, 10, 4, 22, 8] [4]
+			Filter [l_commitdate < l_receiptdate] [4] [4]
+				Scan lineitem [4]
+==========================
+Root of Q5
+	Agg [n_name] [revenue -> l_extendedprice,l_discount] [5]
+		Join $"s_nationkey" === $"c_nationkey" and  $"s_suppkey" === $"l_suppkey" inner [5]
+			Mat Join $"n_nationkey" === $"s_nationkey" inner [5, 2]
+			Mat Join $"o_custkey" === $"c_custkey" inner [5, 18, 10]
+==========================
+Root of Q6
+	Agg [] [revenue -> l_extendedprice,l_discount] [6]
+		Mat Filter [l_receiptdate > l_commitdate] [15, 19, 6, 21, 14] [21]
+==========================
+Root of Q7
+	Agg [l_year, supp_nation, cust_nation] [revenue -> l_extendedprice,l_discount] [7]
+		Select Out: [l_year, l_extendedprice, supp_nation, cust_nation, l_discount] Alias: [l_year -> l_shipdate] [7]
+			Filter [] [7] [7]
+				Join $"c_nationkey" === $"n2_nationkey" inner [7]
+					Join $"s_nationkey" === $"n1_nationkey" inner [7]
+						Join $"l_suppkey" === $"s_suppkey" inner [7]
+							Join $"o_custkey" === $"c_custkey" inner [7]
+								Mat Join $"l_orderkey" === $"o_orderkey" inner [12, 7]
+								Scan customer [7]
+							Scan supplier [7]
+						Select Out: [n1_nationkey, supp_nation] Alias: [supp_nation -> n_name; n1_nationkey -> n_nationkey] [7]
+							Scan nation [7]
+					Select Out: [cust_nation, n2_nationkey] Alias: [n2_nationkey -> n_nationkey; cust_nation -> n_name] [7]
+						Scan nation [7]
+==========================
+Root of Q8
+	Agg [o_year] [mkt_share -> n2_name,volume] [8]
+		Select Out: [o_year, n2_name, volume] Alias: [o_year -> o_orderdate; volume -> l_extendedprice,l_discount] [8]
+			Join $"s_nationkey" === $"n2_nationkey" inner [8]
+				Join $"n1_regionkey" === $"r_regionkey" inner [8]
+					Join $"c_nationkey" === $"n1_nationkey" inner [8]
+						Join $"o_custkey" === $"c_custkey" inner [8]
+							Join $"l_suppkey" === $"s_suppkey" inner [8]
+								Mat Join $"l_partkey" === $"p_partkey" inner [9, 8]
+								Scan supplier [8]
+							Scan customer [8]
+						Select Out: [n1_nationkey, n1_regionkey] Alias: [n1_regionkey -> n_regionkey; n1_nationkey -> n_nationkey] [8]
+							Scan nation [8]
+					Filter [r_name === "AMERICA"] [8] [8]
+						Scan region [8]
+				Select Out: [n2_name, n2_nationkey] Alias: [n2_nationkey -> n_nationkey; n2_name -> n_name] [8]
+					Scan nation [8]
+==========================
+Root of Q9
+	Agg [nation, o_year] [sum_profit -> amount] [9]
+		Select Out: [nation, o_year, amount] Alias: [o_year -> o_orderdate; amount -> ps_supplycost,l_quantity,l_extendedprice,l_discount; nation -> n_name] [9]
+			Join $"s_nationkey" === $"n_nationkey" inner [9]
+				Join $"l_suppkey" === $"s_suppkey" inner [9]
+					Join $"l_partkey" === $"ps_partkey" and  $"l_suppkey" === $"ps_suppkey" inner [9]
+						Mat Join $"l_partkey" === $"p_partkey" inner [9, 8]
+						Scan partsupp [9]
+					Scan supplier [9]
+				Scan nation [9]
+==========================
+Root of Q10
+	Agg [c_phone, c_address, n_name, c_name, c_comment, c_acctbal, c_custkey] [revenue -> l_extendedprice,l_discount] [10]
+		Join $"c_nationkey" === $"n_nationkey" inner [10]
+			Mat Join $"o_custkey" === $"c_custkey" inner [5, 18, 10]
+			Scan nation [10]
+==========================
+Root of Q11
+	Select Out: [ps_partkey, value] Alias: [] [11]
+		Join $"value" > $"small_value" cross [11]
+			Agg [ps_partkey] [value -> ps_supplycost,ps_availqty] [11]
+				Mat Join $"s_suppkey" === $"ps_suppkey" inner [11]
+			Agg [] [small_value -> ps_supplycost,ps_availqty] [11]
+				Mat Join $"s_suppkey" === $"ps_suppkey" inner [11]
+==========================
+Root of Q12
+	Agg [l_shipmode] [high_line_count -> o_orderpriority; low_line_count -> o_orderpriority] [12]
+		Mat Join $"l_orderkey" === $"o_orderkey" inner [12, 7]
+==========================
+Root of Q13
+	Agg [c_count] [custdist -> lit(1L)] [13]
+		Agg [c_custkey] [c_count -> o_orderkey] [13]
+			Join $"c_custkey" === $"o_custkey" left_outer [13]
+				Scan customer [13]
+				Mat Filter [o_orderdate between ("1993-07-01", "1993-10-01")] [9, 13, 5, 18, 10, 4, 22, 8] [4]
+==========================
+Root of Q14
+	Agg [] [promo_revenue -> l_extendedprice,p_type,l_discount] [14]
+		Join $"l_partkey" === $"p_partkey" inner [14]
+			Mat Filter [l_receiptdate > l_commitdate] [15, 19, 6, 21, 14] [21]
+			Scan part [14]
+==========================
+Root of Q15
+	Select Out: [s_name, total_revenue, s_suppkey, s_address, s_phone] Alias: [] [15]
+		Join $"total_revenue" > = $"max_revenue" cross [15]
+			Join $"s_suppkey" === $"supplier_no" inner [15]
+				Scan supplier [15]
+				Mat Select Out: [total_revenue, supplier_no] Alias: [supplier_no -> l_suppkey] [15]
+			Agg [] [max_revenue -> total_revenue] [15]
+				Mat Select Out: [total_revenue, supplier_no] Alias: [supplier_no -> l_suppkey] [15]
+==========================
+Root of Q16
+	Agg [p_brand, p_size, p_type] [supplier_cnt -> ps_suppkey] [16]
+		Select Out: [p_brand, p_size, p_type, ps_suppkey] Alias: [] [16]
+			Join $"ps_suppkey" === $"s_suppkey" left_anti [16]
+				Mat Join $"ps_partkey" === $"p_partkey" inner [16, 2]
+				Select Out: [s_suppkey] Alias: [] [16]
+					Filter [s_comment like ("%Customer%Complaints%")] [16] [16]
+						Scan supplier [16]
+==========================
+Root of Q17
+	Agg [] [avg_yearly -> l_extendedprice] [17]
+		Join $"l_partkey" === $"p_partkey" inner [17]
+			Join $"l_partkey" === $"agg_l_partkey" and  $"l_quantity" < $"avg_quantity" inner [17]
+				Scan lineitem [17]
+				Select Out: [avg_quantity, agg_l_partkey] Alias: [agg_l_partkey -> l_partkey] [17]
+					Agg [l_partkey] [avg_quantity -> l_quantity] [17]
+						Scan lineitem [17]
+			Mat Filter [p_size === 15, p_type like ("%BRASS")] [9, 16, 2, 17, 20, 8] [2]
+==========================
+Root of Q18
+	Agg [o_totalprice, c_name, o_orderkey, c_custkey, o_orderdate] [sum_quantity -> l_quantity] [18]
+		Join $"o_orderkey" === $"agg_orderkey" left_semi [18]
+			Mat Join $"o_custkey" === $"c_custkey" inner [5, 18, 10]
+			Select Out: [agg_orderkey] Alias: [agg_orderkey -> l_orderkey] [18]
+				Filter [] [18] [18]
+					Agg [l_orderkey] [sum_quantity -> l_quantity] [18]
+						Scan lineitem [18]
+==========================
+Root of Q19
+	Agg [] [revenue -> l_extendedprice,l_discount] [19]
+		Join $"l_partkey" === $"p_partkey" and  ((($"p_brand" === "Brand#12") and
+($"p_container" isin("SM CASE", "SM BOX", "SM PACK", "SM PKG")) and
+($"l_quantity" >= 1 and $"l_quantity" <= 11) and
+($"p_size" between(1, 5))
+)
+or (($"p_brand" === "Brand#23") and
+($"p_container" isin("MED BAG", "MED BOX", "MED PKG", "MED PACK")) and
+($"l_quantity" >= 10 and $"l_quantity" <= 20) and
+($"p_size" between(1, 10))
+)
+or (($"p_brand" === "Brand#34") and
+($"p_container" isin("LG CASE", "LG BOX", "LG PACK", "LG PKG")) and
+($"l_quantity" >= 20 and $"l_quantity" <= 30) and
+($"p_size" between(1, 15)))) inner [19]
+			Mat Filter [l_receiptdate > l_commitdate] [15, 19, 6, 21, 14] [21]
+			Scan part [19]
+==========================
+Root of Q20
+	Select Out: [s_name, s_address] Alias: [] [20]
+		Join $"s_nationkey" === $"n_nationkey" inner [20]
+			Join $"s_suppkey" === $"ps_suppkey" left_semi [20]
+				Scan supplier [20]
+				Select Out: [ps_suppkey] Alias: [] [20]
+					Join $"ps_partkey" === $"p_partkey" left_semi [20]
+						Join $"ps_partkey" === $"agg_l_partkey" and  $"ps_suppkey" === $"agg_l_suppkey" and $"ps_availqty" > $"agg_l_sum" inner [20]
+							Scan partsupp [20]
+							Select Out: [agg_l_sum, agg_l_partkey, agg_l_suppkey] Alias: [agg_l_suppkey -> l_suppkey; agg_l_partkey -> l_partkey] [20]
+								Agg [l_suppkey, l_partkey] [agg_l_sum -> l_quantity] [20]
+									Filter [l_shipdate between ("1994-01-01", "1994-12-31")] [20] [20]
+										Scan lineitem [20]
+						Mat Filter [p_size === 15, p_type like ("%BRASS")] [9, 16, 2, 17, 20, 8] [2]
+			Mat Filter [n_name === "SAUDI ARABIA"] [20, 21, 11] [21]
+==========================
+Root of Q22
+	Agg [cntrycode] [numcust -> lit(1L); totalacctbal -> c_acctbal] [22]
+		Select Out: [c_acctbal, cntrycode] Alias: [cntrycode -> c_phone] [22]
+			Join $"c_acctbal" > $"avg_acctbal" cross [22]
+				Join $"c_custkey" === $"o_custkey" left_anti [22]
+					Mat Filter [c_mktsegment === "BUILDING"] [3, 22] [3]
+					Mat Filter [o_orderdate between ("1993-07-01", "1993-10-01")] [9, 13, 5, 18, 10, 4, 22, 8] [4]
+				Agg [] [avg_acctbal -> c_acctbal] [22]
+					Mat Filter [c_mktsegment === "BUILDING"] [3, 22] [3]
+==========================
+Filter [l_receiptdate > l_commitdate] [15, 19, 6, 21, 14] [21]
+	Filter [l_shipmode isin ("AIR", "AIR REG"), l_shipinstruct === "DELIVER IN PERSON"] [15, 19, 6, 21, 14] [19]
+		Filter [l_shipdate between ("1996-01-01", "1996-04-01")] [15, 19, 6, 21, 14] [15]
+			Filter [l_shipdate between ("1995-09-01", "1995-10-01")] [15, 19, 6, 21, 14] [14]
+				Filter [l_shipdate between ("1994-01-01", "1995-01-01"), l_discount between (0.05, 0.07), l_quantity < 24] [15, 19, 6, 21, 14] [6]
+					Scan lineitem [15, 19, 6, 21, 14]
+==========================
+Filter [n_name === "SAUDI ARABIA"] [20, 21, 11] [21]
+	Filter [n_name === "CANADA"] [20, 21, 11] [20]
+		Filter [n_name === "GERMANY"] [20, 21, 11] [11]
+			Scan nation [20, 21, 11]
+==========================
+Join $"n_nationkey" === $"s_nationkey" inner [5, 2]
+	Join $"r_regionkey" === $"n_regionkey" inner [5, 2]
+		Filter [r_name === "EUROPE"] [5, 2] [2]
+			Filter [r_name === "ASIA"] [5, 2] [5]
+				Scan region [5, 2]
+		Scan nation [5, 2]
+	Scan supplier [5, 2]
+==========================
+Join $"ps_partkey" === $"p_partkey" inner [16, 2]
+	Scan partsupp [16, 2]
+	Mat Filter [p_size === 15, p_type like ("%BRASS")] [9, 16, 2, 17, 20, 8] [2]
+==========================
+Filter [c_mktsegment === "BUILDING"] [3, 22] [3]
+	Filter [substring($"c_phone", 1, 2) isin ("13", "31", "23", "29", "30", "18", "17"), c_acctbal > 0.00] [3, 22] [22]
+		Scan customer [3, 22]
+==========================
+Filter [o_orderdate between ("1993-07-01", "1993-10-01")] [9, 13, 5, 18, 10, 4, 22, 8] [4]
+	Filter [o_orderdate between ("1993-10-01", "1994-01-01")] [9, 13, 5, 18, 10, 4, 22, 8] [10]
+		Filter [o_orderdate between ("1995-01-01", "1996-12-31")] [9, 13, 5, 18, 10, 4, 22, 8] [8]
+			Filter [o_orderdate between ("1994-01-01", "1995-01-01")] [9, 13, 5, 18, 10, 4, 22, 8] [5]
+				Scan orders [9, 13, 5, 18, 10, 4, 22, 8]
+==========================
+Join $"o_custkey" === $"c_custkey" inner [5, 18, 10]
+	Mat Join $"l_orderkey" === $"o_orderkey" inner [9, 5, 18, 10, 8]
+	Scan customer [5, 18, 10]
+==========================
+Join $"l_orderkey" === $"o_orderkey" inner [12, 7]
+	Filter [l_shipdate between ("1995-01-01", "1996-12-31")] [12, 7] [7]
+		Filter [l_shipmode === "MAIL", l_commitdate < l_receiptdate, l_shipdate < l_commitdate, l_receiptdate === "1994-01-01"] [12, 7] [12]
+			Scan lineitem [12, 7]
+	Scan orders [12, 7]
+==========================
+Join $"l_partkey" === $"p_partkey" inner [9, 8]
+	Mat Join $"l_orderkey" === $"o_orderkey" inner [9, 5, 18, 10, 8]
+	Mat Filter [p_size === 15, p_type like ("%BRASS")] [9, 16, 2, 17, 20, 8] [2]
+==========================
+Join $"s_suppkey" === $"ps_suppkey" inner [11]
+	Join $"s_nationkey" === $"n_nationkey" inner [11]
+		Scan supplier [11]
+		Mat Filter [n_name === "SAUDI ARABIA"] [20, 21, 11] [21]
+	Scan partsupp [11]
+==========================
+Select Out: [total_revenue, supplier_no] Alias: [supplier_no -> l_suppkey] [15]
+	Agg [l_suppkey] [total_revenue -> l_extendedprice,l_discount] [15]
+		Mat Filter [l_receiptdate > l_commitdate] [15, 19, 6, 21, 14] [21]
+==========================
+Filter [p_size === 15, p_type like ("%BRASS")] [9, 16, 2, 17, 20, 8] [2]
+	Filter [p_name like ("forest%")] [9, 16, 20, 2, 17, 8] [20]
+		Filter [p_brand === "Brand#23", p_container === "MED BOX"] [9, 16, 2, 17, 20, 8] [17]
+			Filter [p_brand =!= "Brand#45", p_size isin (49, 14, 23, 45, 19, 3, 36, 9)] [9, 16, 2, 17, 20, 8] [16]
+				Filter [p_name like ("%green%")] [9, 16, 2, 17, 20, 8] [9]
+					Filter [p_type === "ECONOMY ANODIZED STEEL"] [9, 16, 2, 17, 20, 8] [8]
+						Scan part [9, 16, 2, 17, 20, 8]
+==========================
+Join $"l_orderkey" === $"o_orderkey" inner [9, 5, 18, 10, 8]
+	Filter [l_returnflag === "R"] [9, 5, 18, 10, 8] [10]
+		Scan lineitem [9, 5, 18, 10, 8]
+	Mat Filter [o_orderdate between ("1993-07-01", "1993-10-01")] [9, 13, 5, 18, 10, 4, 22, 8] [4]

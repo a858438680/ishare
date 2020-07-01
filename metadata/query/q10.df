@@ -1,0 +1,20 @@
+def execQ10(spark: SparkSession): Unit = {
+
+  val revenue = new Sum_disc_price
+
+  val c = DataUtils.loadStreamTable(spark, "customer", "c", tpchSchema)
+  val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
+    .filter($"o_orderdate" between ("1993-10-01", "1994-01-01"))
+  val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
+    .filter($"l_returnflag" === "R")
+  val n = DataUtils.loadStreamTable(spark, "nation", "n", tpchSchema)
+
+  return l
+    .join(o, $"l_orderkey" === $"o_orderkey")
+    .join(c, $"o_custkey" === $"c_custkey")
+    .join(n, $"c_nationkey" === $"n_nationkey")
+    .groupBy($"c_custkey", $"c_name", $"c_acctbal", $"c_phone", $"n_name", $"c_address", $"c_comment")
+    .agg(
+      revenue($"l_extendedprice", $"l_discount").as("revenue"))
+
+}

@@ -1,0 +1,27 @@
+def execQ22(spark: SparkSession): Unit = {
+
+  val doubleAvg = new DoubleAvg
+  val numcust = new Count
+  val doubleSum = new DoubleSum
+
+  val c = DataUtils.loadStreamTable(spark, "customer", "c", tpchSchema)
+    .filter((substring($"c_phone", 1, 2) isin ("13", "31", "23", "29", "30", "18", "17")) and ($"c_acctbal" > 0.00))
+
+  val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
+
+  val c1Raw = DataUtils.loadStreamTable(spark, "customer", "c1", tpchSchema)
+    .filter((substring($"c_phone", 1, 2) isin ("13", "31", "23", "29", "30", "18", "17")) and ($"c_acctbal" > 0.00))
+
+  val subquery1 = c1Raw
+    .agg(
+        doubleAvg($"c_acctbal").as("avg_acctbal"))
+
+  return c
+    .join(o, $"c_custkey" === $"o_custkey", "left_anti")
+    .join(subquery1, $"c_acctbal" > $"avg_acctbal", "cross")
+    .select(substring($"c_phone", 1, 2).as("cntrycode"), $"c_acctbal")
+    .groupBy($"cntrycode")
+    .agg(
+        numcust(lit(1L)).as("numcust"),
+        doubleSum($"c_acctbal").as("totalacctbal"))
+}

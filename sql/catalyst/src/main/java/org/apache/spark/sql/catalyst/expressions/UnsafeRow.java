@@ -150,7 +150,7 @@ public final class UnsafeRow extends InternalRow implements Externalizable, Kryo
     this.numFields = numFields;
     this.bitSetWidthInBytes = calculateBitSetWidthInBytes(numFields);
     this.qidMask = computeQidMask(numFields);
-    this.metaMask = computerMetaMask(numFields);
+    this.metaMask = computeMetaMask(numFields);
   }
 
   // for serializer
@@ -243,7 +243,7 @@ public final class UnsafeRow extends InternalRow implements Externalizable, Kryo
     return ~((-1L) >>> (64 - numFields - OPBITNUM));
   }
 
-  private static long computerMetaMask(int numFields) {
+  private static long computeMetaMask(int numFields) {
     return ~((-1L) >>> (64 - numFields));
   }
 
@@ -793,7 +793,7 @@ public final class UnsafeRow extends InternalRow implements Externalizable, Kryo
     this.numFields = in.readInt();
     this.bitSetWidthInBytes = calculateBitSetWidthInBytes(numFields);
     this.qidMask = computeQidMask(numFields);
-    this.metaMask = computerMetaMask(numFields);
+    this.metaMask = computeMetaMask(numFields);
     this.baseObject = new byte[sizeInBytes];
     in.readFully((byte[]) baseObject);
   }
@@ -813,7 +813,7 @@ public final class UnsafeRow extends InternalRow implements Externalizable, Kryo
     this.numFields = in.readInt();
     this.bitSetWidthInBytes = calculateBitSetWidthInBytes(numFields);
     this.qidMask = computeQidMask(numFields);
-    this.metaMask = computerMetaMask(numFields);
+    this.metaMask = computeMetaMask(numFields);
     this.baseObject = new byte[sizeInBytes];
     in.read((byte[]) baseObject);
   }

@@ -1,0 +1,32 @@
+def execQ15(spark: SparkSession): Unit = {
+
+  val count = new Count
+
+  val s = DataUtils.loadStreamTable(spark, "supplier", "s", tpchSchema)
+  val revenue = execQ15_subquery(spark)
+  val sub_revenue = execQ15_subquery(spark)
+
+  val max_revenue = sub_revenue
+    .agg(
+        max($"total_revenue").as("max_revenue"))
+
+  return s
+    .join(revenue, $"s_suppkey" === $"supplier_no")
+    .join(max_revenue, $"total_revenue" >= $"max_revenue", "cross")
+    .select($"s_suppkey", $"s_name", $"s_address", $"s_phone", $"total_revenue")
+}
+
+def execQ15_subquery(spark: SparkSession): DataFrame = {
+
+  val sum_disc_price = new Sum_disc_price
+
+  val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
+    .filter($"l_shipdate" between ("1996-01-01", "1996-04-01"))
+
+  return l
+    .groupBy($"l_suppkey")
+    .agg(
+        sum_disc_price($"l_extendedprice", $"l_discount").as("total_revenue"))
+    .select($"l_suppkey".as("supplier_no"), $"total_revenue")
+}
+

@@ -644,7 +644,7 @@ abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
         execution.SortExec(sortExprs, global, planLater(child)) :: Nil
       case logical.Project(projectList, child) =>
         if (SlothDBContext.enable_slothdb) {
-         execution.SlothProjectExec(projectList, planLater(child)) :: Nil
+          execution.SlothProjectExec(projectList, planLater(child)) :: Nil
         } else {
           execution.ProjectExec(projectList, planLater(child)) :: Nil
         }

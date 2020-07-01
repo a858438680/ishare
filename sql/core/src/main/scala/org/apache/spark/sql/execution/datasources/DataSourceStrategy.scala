@@ -403,8 +403,13 @@ case class DataSourceStrategy(conf: SQLConf) extends Strategy with Logging with 
         scanBuilder(requestedColumns, candidatePredicates, pushedFilters),
         relation.relation,
         relation.catalogTable.map(_.identifier))
-      execution.ProjectExec(
+      if (SlothDBContext.enable_slothdb) {
+        execution.SlothProjectExec(
         projects, filterCondition.map(execution.FilterExec(_, scan)).getOrElse(scan))
+      } else {
+        execution.ProjectExec(
+          projects, filterCondition.map(execution.FilterExec(_, scan)).getOrElse(scan))
+      }
     }
   }
 

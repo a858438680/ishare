@@ -331,7 +331,7 @@ case class SlothFilterExec(condition: Expression, child: SparkPlan)
 
   private var opId: Long = _
   private var queryId: UUID = _
-  var subQID: Int = _
+  var subQIDArray: Array[Int] = _
 
   def setID(operatorId: Long, queryRunId: UUID): Unit = {
     this.opId = operatorId
@@ -396,9 +396,16 @@ case class SlothFilterExec(condition: Expression, child: SparkPlan)
           }
 
           val predPass = predicate.eval(thisRow)
-          if (!predPass) thisRow.setQidValid(subQID, false)
+          if (!predPass) {
+            subQIDArray.foreach(subQID => {
+              thisRow.setQidValid(subQID, false)
+            })
+          }
+          val finalPass =
+            if (subQIDArray.length != 0) thisRow.isRowValid
+            else predPass
 
-          if (thisRow.isRowValid) {
+          if (finalPass) {
 
             if (isInsert && !updateCase) opOutput(INSERT) += 1
             else if (!isInsert && !isUpdate) opOutput(DELETE) += 1
