@@ -20,7 +20,9 @@
 package totem.middleground.sqp
 
 import scala.collection.mutable
-import scala.collection.mutable.ArrayBuffer
+
+case class TypeAttr (attr: String,
+                     typeStr: String)
 
 abstract class PlanOperator (qidSet: Array[Int],
                              outputAttrs: mutable.HashSet[String],
@@ -34,6 +36,12 @@ abstract class PlanOperator (qidSet: Array[Int],
   var signature: String = ""
   var internalQidSet = qidSet
 
+  // These attributes are for code generation
+  var subQueryName: String = _
+  var subQueryUID: Int = _
+  var possibleOutputAttrs = mutable.HashSet.empty[TypeAttr]
+  var requireOutputAttrs = mutable.HashSet.empty[TypeAttr]
+
   def setChildren(childOperators: Array[PlanOperator]): Unit = {
     this.childOps = childOperators
   }
@@ -45,6 +53,27 @@ abstract class PlanOperator (qidSet: Array[Int],
   def setId(newId: Int): Unit = {
     this.id = newId
   }
+
+  def setUID(newUID: Int): Unit = {
+    this.subQueryUID = newUID
+  }
+
+  def setSubQueryName(subQueryName: String): Unit = {
+    this.subQueryName = subQueryName
+  }
+
+  def setPossibleOutputAttrs(outputAtts: mutable.HashSet[TypeAttr]): Unit = {
+    this.possibleOutputAttrs = outputAtts
+  }
+
+  def setRequiredOutputAttrs(outputAtts: mutable.HashSet[TypeAttr]): Unit = {
+    this.requireOutputAttrs = outputAtts
+  }
+
+  def getOutputAttrs: mutable.HashSet[String] = outputAttrs
+  def getReferencedAttrs: mutable.HashSet[String] = referencedAttrs
+  def getAliasAttrs: mutable.HashMap[String, String] = aliasAttrs
+  def getDFStr: String = dfStr
 
   def genSigStr(childSignatures: Array[String]): String
 
@@ -214,6 +243,13 @@ class JoinOperator (qidSet: Array[Int],
   }
 
   def getJoinKeys: Array[String] = joinKey
+
+  def getJoinCondition: String = {
+      if (postFilter == "") s"${joinKey(0)} $joinOP ${joinKey(1)}"
+      else s"${joinKey(0)} $joinOP ${joinKey(1)} and ${postFilter}"
+  }
+
+  def getJoinType: String = joinType
 }
 
 class AggOperator (qidSet: Array[Int],
@@ -250,6 +286,8 @@ class AggOperator (qidSet: Array[Int],
     super.basicCopy(newOP)
   }
 
+  def getGroupByAttrs: mutable.HashSet[String] = groupByAttrs
+  def getAGGFuncDef: mutable.HashMap[String, String] = aggFunc
 }
 
 class RootOperator(qidSet: Array[Int],

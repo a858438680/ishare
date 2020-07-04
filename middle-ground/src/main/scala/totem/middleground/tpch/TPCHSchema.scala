@@ -21,6 +21,7 @@ import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.types.StructType
 
 class TPCHSchema {
+
   val supplierTopics = "Supplier"
   val partTopics = "Part"
   val partsuppTopics = "PartSupp"

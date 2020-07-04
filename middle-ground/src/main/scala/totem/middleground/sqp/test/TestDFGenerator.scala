@@ -21,10 +21,10 @@ package totem.middleground.sqp.test
 
 import totem.middleground.sqp.Optimizer
 import totem.middleground.sqp.Parser
+import totem.middleground.sqp.QueryGenerator
 import totem.middleground.sqp.Utils
 
-object TestOptimizer {
-
+object TestDFGenerator {
   def main(args: Array[String]): Unit = {
 
     // if (args.length < 2) {
@@ -38,16 +38,10 @@ object TestOptimizer {
     }
 
     Optimizer.initializeOptimizer(args(2))
-    testOptimizerForMultiQuery(args(0), args(1))
+    testDFGenerator(args(0), args(1))
   }
 
-  private def testOptimizerForSameQuery(fileName: String, qid: Int): Unit = {
-    val subQuery = Parser.parseQuery(fileName, qid)
-    Utils.printPlanGraph(
-      Array(Optimizer.OptimizeOneQuery(subQuery)))
-  }
-
-  private def testOptimizerForMultiQuery(dir: String, configName: String): Unit = {
+  private def testDFGenerator(dir: String, configName: String): Unit = {
     val configInfo = Utils.parseConfigFile(configName)
 
     val queries = configInfo.map(info => {
@@ -57,7 +51,10 @@ object TestOptimizer {
       Parser.parseQuery(dfName, qid)
     }).map(Optimizer.OptimizeOneQuery)
 
-    Utils.printPlanGraph(Optimizer.OptimizeMultiQuery(queries))
+    val multiQuery = Optimizer.OptimizeMultiQuery(queries)
+
+    Utils.printPlanGraph(multiQuery)
+    QueryGenerator.printSubQueryProgram(multiQuery)
   }
 
 }

@@ -21,6 +21,7 @@ package totem.middleground.sqp
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
+import scala.io.Source
 
 object Utils {
 
@@ -68,6 +69,14 @@ object Utils {
         printOPWithIndent(_, indent + INDENT, visited).foreach(arrayBuf.append(_)))
       arrayBuf.toArray
     }
+  }
+
+  def parseConfigFile(configName: String): Array[(String, Int)] = {
+    val lines = Source.fromFile(configName).getLines().map(_.trim).toArray
+    lines.map(line => {
+      val configInfo = line.split(",").map(_.trim)
+      (configInfo(0), configInfo(1).toInt)
+    })
   }
 
   def qidSetToString(qidSet: Array[Int]): String = {

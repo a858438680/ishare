@@ -44,6 +44,18 @@ object Catalog {
     catalog.getTableSize(tableName)
   }
 
+  def getAllAttrs(tableName: String): mutable.HashSet[TypeAttr] = {
+    catalog.getAllAttrs(tableName)
+  }
+
+  def getTypeForAttr(attrName: String): String = {
+    catalog.getTypeForAttr(attrName)
+  }
+
+  def getTableAlias(tableName: String): String = {
+    catalog.getTableAlias(tableName)
+  }
+
 }
 
 class Catalog (predFile: String) {
@@ -102,6 +114,91 @@ class Catalog (predFile: String) {
     "region"    -> 5
   )
 
+  private val lineitemSchema = mutable.HashSet(
+    TypeAttr("l_orderkey", "long"),
+    TypeAttr("l_partkey", "long"),
+    TypeAttr("l_suppkey", "long"),
+    TypeAttr("l_linenumber", "int"),
+    TypeAttr("l_quantity", "double"),
+    TypeAttr("l_extendedprice", "double"),
+    TypeAttr("l_discount", "double"),
+    TypeAttr("l_tax", "double"),
+    TypeAttr("l_returnflag", "string"),
+    TypeAttr("l_linestatus", "string"),
+    TypeAttr("l_shipdate", "date"),
+    TypeAttr("l_commitdate", "date"),
+    TypeAttr("l_receiptdate", "date"),
+    TypeAttr("l_shipinstruct", "string"),
+    TypeAttr("l_shipmode", "string"),
+    TypeAttr("l_comment", "string")
+  )
+
+  private val ordersSchema = mutable.HashSet(
+    TypeAttr("o_orderkey", "long"),
+    TypeAttr("o_custkey", "long"),
+    TypeAttr("o_orderstatus", "string"),
+    TypeAttr("o_totalprice", "double"),
+    TypeAttr("o_orderdate", "date"),
+    TypeAttr("o_orderpriority", "string"),
+    TypeAttr("o_clerk", "string"),
+    TypeAttr("o_shippriority", "int"),
+    TypeAttr("o_comment", "string")
+  )
+
+  private val customerSchema = mutable.HashSet(
+    TypeAttr("c_custkey", "long"),
+    TypeAttr("c_name", "string"),
+    TypeAttr("c_address", "string"),
+    TypeAttr("c_nationkey", "long"),
+    TypeAttr("c_phone", "string"),
+    TypeAttr("c_acctbal", "double"),
+    TypeAttr("c_mktsegment", "string"),
+    TypeAttr("c_comment", "string")
+  )
+
+  private val partSchema = mutable.HashSet(
+    TypeAttr("p_partkey", "long"),
+    TypeAttr("p_name", "string"),
+    TypeAttr("p_mfgr", "string"),
+    TypeAttr("p_brand", "string"),
+    TypeAttr("p_type", "string"),
+    TypeAttr("p_size", "int"),
+    TypeAttr("p_container", "string"),
+    TypeAttr("p_retailprice", "double"),
+    TypeAttr("p_comment", "string")
+  )
+
+  private val partsuppSchema = mutable.HashSet(
+    TypeAttr("ps_partkey", "long"),
+    TypeAttr("ps_suppkey", "long"),
+    TypeAttr("ps_availqty", "int"),
+    TypeAttr("ps_supplycost", "double"),
+    TypeAttr("ps_comment", "string")
+  )
+
+  private val supplierSchema = mutable.HashSet(
+    TypeAttr("s_suppkey", "long"),
+    TypeAttr("s_name", "string"),
+    TypeAttr("s_address", "string"),
+    TypeAttr("s_nationkey", "long"),
+    TypeAttr("s_phone", "string"),
+    TypeAttr("s_acctbal", "double"),
+    TypeAttr("s_comment", "string")
+  )
+
+  private val nationSchema = mutable.HashSet(
+    TypeAttr("n_nationkey", "long"),
+    TypeAttr("n_name", "string"),
+    TypeAttr("n_regionkey", "long"),
+    TypeAttr("n_comment", "string")
+  )
+
+  private val regionSchema = mutable.HashSet(
+    TypeAttr("r_regionkey", "long"),
+    TypeAttr("r_name", "string"),
+    TypeAttr("r_comment", "string")
+  )
+
   private def parsePredFile(fileName: String): mutable.HashMap[String, Double] = {
 
     val predMap = mutable.HashMap.empty[String, Double]
@@ -124,6 +221,50 @@ class Catalog (predFile: String) {
     math.min(card1, card2)
   }
 
+  def getAllAttrs(tableName: String): mutable.HashSet[TypeAttr] = {
+    tableName.toLowerCase match {
+      case "lineitem" => lineitemSchema
+      case "orders" => ordersSchema
+      case "customer" => customerSchema
+      case "part" => partSchema
+      case "supplier" => supplierSchema
+      case "partsupp" => partsuppSchema
+      case "nation" => nationSchema
+      case "region" => regionSchema
+      case _ =>
+        System.err.println(s"Unknown table $tableName")
+        System.exit(1)
+        null
+    }
+  }
+
+  def getTableAlias(tableName: String): String = {
+     tableName.toLowerCase match {
+      case "lineitem" => "l"
+      case "orders" => "o"
+      case "customer" => "c"
+      case "part" => "p"
+      case "supplier" => "s"
+      case "partsupp" => "ps"
+      case "nation" => "n"
+      case "region" => "r"
+      case _ =>
+        System.err.println(s"Unknown table $tableName")
+        System.exit(1)
+        ""
+    }
+  }
+
+  def getTypeForAttr(attrName: String): String = {
+    val tableName = getTableNameFromKey(attrName)
+    val attrs = getAllAttrs(tableName)
+    var typeStr = ""
+    attrs.foreach(typeAttr => {
+      if (typeAttr.attr.compareTo(attrName) == 0) typeStr = typeAttr.typeStr
+    })
+    typeStr
+  }
+
   private def estimateJoinCardHelper(leftKey: String, rightKey: String,
                                      leftCard: Double, rightCard: Double): Double = {
     val ratio = cardRatio.getOrElse(s"$leftKey:$rightKey", {
@@ -141,32 +282,26 @@ class Catalog (predFile: String) {
     leftCard * (rightCard/distinctValue)
   }
 
-  private def getTableSizeFromKey(key: String): Double = {
-
+  private def getTableNameFromKey(key: String): String = {
     val idx = key.indexOf("_") + 1
     key.substring(0, idx) match {
-      case "l_" =>
-        baseTableSize("lineitem").toDouble
-      case "o_" =>
-        baseTableSize("orders").toDouble
-      case "c_" =>
-        baseTableSize("customer").toDouble
-      case "s_" =>
-        baseTableSize("supplier").toDouble
-      case "ps_" =>
-        baseTableSize("partsupp").toDouble
-      case "p_" =>
-        baseTableSize("part").toDouble
-      case "n_" =>
-        baseTableSize("nation").toDouble
-      case "r_" =>
-        baseTableSize("region").toDouble
+      case "l_" => "lineitem"
+      case "o_" => "orders"
+      case "c_" => "customer"
+      case "s_" => "supplier"
+      case "ps_" => "partsupp"
+      case "p_" => "part"
+      case "n_" => "nation"
+      case "r_" => "region"
       case _ =>
         System.err.println(s"Key $key Not Recognized")
         System.exit(1)
-        1.0
+        ""
     }
+  }
 
+  private def getTableSizeFromKey(key: String): Double = {
+    getTableSize(getTableNameFromKey(key))
   }
 
   def getSelectivity(predStr: String): Double = {

@@ -553,14 +553,14 @@ object Parser {
         op = LONGEQSTR
         // primaryJoin.split(LONGEQSTR).map(getStringBetween(_, LEFTATTR, RIGHTATTR))
         primaryJoin.split(LONGEQSTR).map(_.trim)
-      } else if (primaryJoin.indexOf(GSTR) != -1) {
-        op = GSTR
-        // primaryJoin.split(GSTR).map(getStringBetween(_, LEFTATTR, RIGHTATTR))
-        primaryJoin.split(GSTR).map(_.trim)
-      } else {
+      } else if (primaryJoin.indexOf(GEQSTR) != -1) {
         op = GEQSTR
-        // primaryJoin.split(GEQSTR).map(getStringBetween(_, LEFTATTR, RIGHTATTR))
+        // primaryJoin.split(GSTR).map(getStringBetween(_, LEFTATTR, RIGHTATTR))
         primaryJoin.split(GEQSTR).map(_.trim)
+      } else {
+        op = GSTR
+        // primaryJoin.split(GEQSTR).map(getStringBetween(_, LEFTATTR, RIGHTATTR))
+        primaryJoin.split(GSTR).map(_.trim)
       }
     val postFilter = joinCondition.substring(postIdx, joinCondition.length)
 
