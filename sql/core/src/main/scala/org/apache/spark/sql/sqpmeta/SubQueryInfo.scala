@@ -17,10 +17,11 @@
 
 package org.apache.spark.sql.sqpmeta
 
+import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 case class SubQueryInfo (qidArray: Array[Int],
-                         predInfoArray: Array[PredInfo],
+                         predInfoMap: mutable.HashMap[Int, mutable.HashSet[PredInfo]],
                          aggQidCluster: Array[Long]) {
 
   def extractQidSet(): Long = {
@@ -31,12 +32,14 @@ case class SubQueryInfo (qidArray: Array[Int],
     qidSet
   }
 
-  def getPredQidArray(predInfo: PredInfo): Array[Int] = {
+  def getPredQidArray(predInfoSet: mutable.HashSet[PredInfo]): Array[Int] = {
     val qidBuf = ArrayBuffer[Int]()
-    val predStr = predInfo.toString
-    predInfoArray.foreach(tmpInfo => {
-      if (tmpInfo.toString.compareToIgnoreCase(predStr) == 0) {
-        qidBuf.append(tmpInfo.qid)
+
+    predInfoMap.foreach(pair => {
+      val qid = pair._1
+      val candSet = pair._2
+      if (candSet.diff(predInfoSet).isEmpty && predInfoSet.diff(candSet).isEmpty) {
+        qidBuf.append(qid)
       }
     })
 
@@ -44,7 +47,7 @@ case class SubQueryInfo (qidArray: Array[Int],
   }
 }
 
-case class PredInfo (qid: Int, left: String, op: String, right: String) {
+case class PredInfo (left: String, op: String, right: String) {
   override def toString: String = {
     s"$left $op $right"
   }
@@ -54,6 +57,7 @@ object SubQueryInfo {
 
   private val andString = " && "
   private val orString = " || "
+  private val dotStr = ")."
 
   private def countCommonString(commonStr: String, conditionStr: String): Int = {
     var count = 0
@@ -82,46 +86,107 @@ object SubQueryInfo {
     }
   }
 
-  private def extractFirstPredString(conditionStr: String): String = {
+  private def extractPredStrs(conditionStr: String): Array[String] = {
     val numSubPred =
-      countCommonString(andString, conditionStr) + countCommonString(orString, conditionStr) + 1
+      countCommonString(andString, conditionStr) + 1 // Only consider conjunctive predicates
 
-    if (numSubPred == 1) return conditionStr
+    val conditionStrArray = new Array[String](numSubPred)
 
-    val startIndex = numSubPred - 1
-    val endIndex = endIndexOfFirstPred(conditionStr)
-    conditionStr.substring(startIndex, endIndex)
+    var tmpStr = conditionStr.trim
+    var remainPred = numSubPred
+    while (remainPred > 1) {
+
+      tmpStr = tmpStr.substring(1, tmpStr.length - 1) // strip a parenthesis
+      val andIdx = tmpStr.lastIndexOf(andString) // find the last andString
+
+      // find the tail predicate and generate new string
+      conditionStrArray(remainPred - 1) = tmpStr.substring(andIdx + andString.length).trim
+      tmpStr = tmpStr.substring(0, andIdx).trim
+
+      remainPred -= 1
+    }
+
+    conditionStrArray(remainPred - 1) = tmpStr
+    conditionStrArray
   }
 
-  def extractPredInfo(inputConditionStr: String): PredInfo = {
-    val conditionStr = extractFirstPredString(inputConditionStr)
+  def extractPredInfo(inputConditionStr: String): mutable.HashSet[PredInfo] = {
+    val predSet = mutable.HashSet.empty[PredInfo]
+    val conditionStrArray = extractPredStrs(inputConditionStr)
+    conditionStrArray.map(parseOnePredInfo).filter(_ != null).foreach(predSet.add)
+
+    predSet
+  }
+
+  private def parseOnePredInfo(conditionStr: String): PredInfo = {
+
+    if (conditionStr.contains(" IN ")) return null // Do not evaluate isin predicate
 
     val not = conditionStr.startsWith("NOT")
+    val mode =
+      if (conditionStr.startsWith("Contains")) 0
+      else if (conditionStr.startsWith("StartsWith")) 1
+      else if (conditionStr.startsWith("EndsWith")) 2
+      else -1
 
-    val dotIdx = conditionStr.lastIndexOf(").")
-    if (dotIdx == -1) return null
+    val numDotStr = countCommonString(dotStr, conditionStr)
 
-    val predStr = conditionStr.substring(dotIdx + 2, conditionStr.length - 1)
-    val predStrArray = predStr.split("\\s+")
-    if (predStrArray.length == 3) {
-      val left = predStrArray(0)
-      val right = predStrArray(2)
-      val op =
-        if (predStrArray(1).compareTo("=") == 0 && not) "!="
-        else predStrArray(1)
+    if (numDotStr == 1) {
+      val dotIdx = conditionStr.lastIndexOf(dotStr)
+      if (dotIdx == -1) return null
 
-      PredInfo(-1, left, op, right)
-    } else if (predStrArray.length == 5) { // this is the case for date comparison
-      val left = predStrArray(0)
-      val right = predStrArray(4)
-      val op =
-        if (predStrArray(3).compareTo("=") == 0 && not) "!="
-        else predStrArray(3)
+      val predStr = conditionStr.substring(dotIdx + 2, conditionStr.length - 1)
+      if (mode == -1) {
+        val predStrArray = predStr.split("\\s+")
+        if (predStrArray.length == 3) {
+          val left = predStrArray(0)
+          val right = predStrArray(2)
+          val op =
+            if (predStrArray(1).compareTo("=") == 0 && not) "!="
+            else predStrArray(1)
 
-      PredInfo(-1, left, op, right)
+          PredInfo(left, op, right)
+        } else if (predStrArray.length == 5) { // this is the case for date comparison
+          val left = predStrArray(0)
+          val right = predStrArray(4)
+          val op =
+            if (predStrArray(3).compareTo("=") == 0 && not) "!="
+            else predStrArray(3)
+
+          PredInfo(left, op, right)
+        } else {
+          null
+        }
+      } else { // this is the case for like
+
+        val predStrArray = predStr.split(", ")
+        val left = predStrArray(0)
+        val right = predStrArray(1)
+        val op =
+          if (mode == 0) "Contains"
+          else if (mode == 1) "StartsWith"
+          else "EndsWith"
+
+        PredInfo(left, op, right)
+      }
+    } else if (numDotStr == 2) { // refer two attrs
+
+      val firstDotIdx = conditionStr.indexOf(dotStr)
+      val lastDotIdx = conditionStr.lastIndexOf(dotStr)
+
+      val leftEnd = conditionStr.indexOf(" ", firstDotIdx)
+      val left = conditionStr.substring(firstDotIdx + 2, leftEnd)
+
+      val opEnd = conditionStr.indexOf(" ", leftEnd + 1)
+      val op = conditionStr.substring(leftEnd + 1, opEnd).trim
+
+      val rightEnd = conditionStr.length - 1
+      val right = conditionStr.substring(lastDotIdx + 2, rightEnd)
+
+      PredInfo(left, op, right)
     } else {
       null
     }
-  }
 
+  }
 }

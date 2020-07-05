@@ -19,8 +19,6 @@
 
 package totem.middleground.sqp
 
-import scala.collection.immutable.HashMap
-import scala.collection.immutable.HashSet
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.runtime.universe
@@ -76,6 +74,7 @@ object QueryGenerator {
 
     // Generate required output
     multiQuery.foreach(generateRequiredOutput(_, mutable.HashSet.empty[String]))
+    subQueries.foreach(_.genRequiredOutputArray())
 
     subQueries
   }
@@ -322,7 +321,7 @@ object QueryGenerator {
         strBuf.append(
           s"private val $tableName = new StructType()\n"
         )
-        subQuery.requireOutputAttrs.foreach(typeAttr => {
+        subQuery.requireOutputArray.foreach(typeAttr => {
           val attrName = typeAttr.attr
           val typeName = typeAttr.typeStr
           val str = s""".add("$attrName", "$typeName")\n"""
@@ -421,13 +420,26 @@ object QueryGenerator {
       }
     }
 
+    if (isRoot && subQuery.parentOps.length > 1) {
+      newStrBuf.append("\n.select(")
+      subQuery.requireOutputArray.zipWithIndex.foreach(pair => {
+        val outputAttr = pair._1
+        val idx = pair._2
+        newStrBuf.append(s"""$$"${outputAttr.attr}"""")
+        if (idx != subQuery.requireOutputArray.length - 1) {
+          newStrBuf.append(", ")
+        }
+      })
+      newStrBuf.append(")")
+    }
+
     newStrBuf.toString
   }
 
   private def generateQueryConfig(subQueries: Array[PlanOperator]): QueryConfig = {
     val numBatches = Array(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-      1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
-    val constraints = new Array[String](35)
+      1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+    val constraints = Array.fill[String](35)("1.0")
 
     val queryNames = subQueries.map(_.subQueryName)
     val shareTopics = subQueries.filter(_.parentOps.length > 1).map(_.subQueryName)
@@ -436,23 +448,23 @@ object QueryGenerator {
     val subQueryInfo = subQueries.map(subQuery => {
 
       val dependency = mutable.HashSet.empty[Int]
-      val predArray = new ArrayBuffer[PredInfo]()
+      val predInfoMap = mutable.HashMap.empty[Int, mutable.HashSet[PredInfo]]
       val aggCluster = new ArrayBuffer[Long]()
       val qidSet = new ArrayBuffer[Int]()
       subQuery.getQidSet.foreach(qidSet.append(_))
 
-      collectQueryInfo(subQuery, dependency, predArray, aggCluster, true)
+      collectQueryInfo(subQuery, dependency, predInfoMap, aggCluster, true)
       queryDependency.put(subQuery.subQueryUID, dependency)
 
-      SubQueryInfo(qidSet.toArray, predArray.toArray, aggCluster.toArray)
+      SubQueryInfo(qidSet.toArray, predInfoMap, aggCluster.toArray)
     })
 
     QueryConfig(queryNames, numBatches, constraints, subQueryInfo, queryDependency, shareTopics)
   }
 
   private def collectQueryInfo(subQuery: PlanOperator, dependency: mutable.HashSet[Int],
-                               predArray: ArrayBuffer[PredInfo], aggCluster: ArrayBuffer[Long],
-                               isRoot: Boolean): Unit = {
+                               predInfoMap: mutable.HashMap[Int, mutable.HashSet[PredInfo]],
+                               aggCluster: ArrayBuffer[Long], isRoot: Boolean): Unit = {
 
     if (subQuery.parentOps.length > 1 && !isRoot) {
 
@@ -461,18 +473,24 @@ object QueryGenerator {
     } else {
 
       subQuery.childOps.foreach(child => {
-        collectQueryInfo(child, dependency, predArray, aggCluster, false)
+        collectQueryInfo(child, dependency, predInfoMap, aggCluster, false)
       })
 
       subQuery match {
         case select: SelectOperator =>
           if (select.getQidSet.length > 1) {
             val qid = select.selectSet(0)
-            val pred = select.getPredicates(0)
-            predArray.append(PredInfo(qid, pred.left, pred.op, pred.right))
+            if (!predInfoMap.contains(qid)) {
+              val newPredInfoSet = mutable.HashSet.empty[PredInfo]
+              predInfoMap.put(qid, newPredInfoSet)
+            }
+            val predInfoSet = predInfoMap(qid)
+            select.getPredicates.foreach(pred => {
+              convertPredToInternal(pred).foreach(predInfoSet.add)
+            })
           }
         case agg: AggOperator =>
-          if (aggCluster.nonEmpty) {
+          if (aggCluster.isEmpty) {
             val qidSet = agg.getQidSet
             qidSet.map(convertQidToBitVec).foreach(aggCluster.append(_))
           }
@@ -484,6 +502,58 @@ object QueryGenerator {
 
   private def convertQidToBitVec(qid: Int): Long = {
     1L << qid
+  }
+
+  private def convertPredToInternal(predicate: Predicate): Array[PredInfo] = {
+    val left = predicate.left
+    val op = predicate.op
+    val right = predicate.right
+
+    if (op.compareTo("between") == 0) {
+      val rightArray = stripParenthesis(right).split(",").map(stripQuote(_).trim)
+      Array(
+        PredInfo(left, ">=", rightArray(0)),
+        PredInfo(left, "<=", rightArray(1)))
+    } else if (op.compareTo("like") == 0) {
+      val (newRight, mode) = stripModSymbol(stripQuote(stripParenthesis(right)))
+      if (mode == 0) Array(PredInfo(left, "Contains", newRight))
+      else if (mode == 1) Array(PredInfo(left, "StartsWith", newRight))
+      else Array(PredInfo(left, "EndsWith", newRight))
+    } else if (op.compareTo("===") == 0) {
+      Array(PredInfo(left, "=", right))
+    } else if (op.compareTo("=!=") == 0) {
+      Array(PredInfo(left, "!=", right))
+    } else if (op.compareTo("isin") != 0) {
+      Array(PredInfo(left, op, right))
+    } else {
+      Array.empty[PredInfo]
+    }
+  }
+
+  private def stripQuote(str: String): String = {
+    val quote = '\"'
+    if (str(0) != quote) str
+    else str.substring(1, str.length - 1)
+  }
+
+  private def stripParenthesis(str: String): String = {
+    val left = '('
+    if (str(0) != left) str
+    else str.substring(1, str.length - 1)
+  }
+
+  // 0 contains
+  // 1 StartsWith
+  // 2 EndsWith
+  private def stripModSymbol(str: String): (String, Int) = {
+    val mod = '%'
+    if (str(0) == mod && str(str.length - 1) == mod) {
+      (str.substring(1, str.length - 1), 0)
+    } else if (str(str.length - 1) == mod) {
+      (str.substring(0, str.length - 1), 1)
+    } else {
+      (str.substring(1, str.length), 2)
+    }
   }
 
 }

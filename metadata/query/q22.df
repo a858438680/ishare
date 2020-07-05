@@ -5,12 +5,12 @@ def execQ22(spark: SparkSession): Unit = {
   val doubleSum = new DoubleSum
 
   val c = DataUtils.loadStreamTable(spark, "customer", "c", tpchSchema)
-    .filter((substring($"c_phone", 1, 2) isin ("13", "31", "23", "29", "30", "18", "17")) and ($"c_acctbal" > 0.00))
+    .filter(($"c_acctbal" > 0.00) and (substring($"c_phone", 1, 2) isin ("13", "31", "23", "29", "30", "18", "17")))
 
   val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
 
   val c1Raw = DataUtils.loadStreamTable(spark, "customer", "c1", tpchSchema)
-    .filter((substring($"c_phone", 1, 2) isin ("13", "31", "23", "29", "30", "18", "17")) and ($"c_acctbal" > 0.00))
+    .filter(($"c_acctbal" > 0.00) and (substring($"c_phone", 1, 2) isin ("13", "31", "23", "29", "30", "18", "17")))
 
   val subquery1 = c1Raw
     .agg(

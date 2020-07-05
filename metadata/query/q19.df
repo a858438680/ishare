@@ -3,7 +3,7 @@ def execQ19(spark: SparkSession): Unit = {
   val sum_disc_price = new Sum_disc_price
 
   val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
-    .filter(($"l_shipmode" isin ("AIR", "AIR REG")) and ($"l_shipinstruct" === "DELIVER IN PERSON"))
+    .filter(($"l_shipinstruct" === "DELIVER IN PERSON") and ($"l_shipmode" isin ("AIR", "AIR REG")))
   val p = DataUtils.loadStreamTable(spark, "part", "p", tpchSchema)
 
   return l

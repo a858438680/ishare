@@ -17,6 +17,8 @@
 
 package totem.middleground.tpch
 
+import scala.collection.mutable
+
 import org.apache.spark.sql.sqpmeta.{PredInfo, SubQueryInfo}
 
 object ExampleQueryInfo {
@@ -24,28 +26,31 @@ object ExampleQueryInfo {
 
   // For SubQuery 2
   var qidArray = Array(0, 1)
-  var predInfoArray = new Array[PredInfo](3)
-  predInfoArray(0) = PredInfo(0, "l_shipdate", "<=", "1994-01-01" )
-  predInfoArray(1) = PredInfo(1, "l_shipdate", "<=", "1994-01-01")
-  predInfoArray(2) = PredInfo(0, "p_size", "=", "1")
+  var predInfoMap = mutable.HashMap.empty[Int, mutable.HashSet[PredInfo]]
+  predInfoMap.put(0, mutable.HashSet(
+    PredInfo("l_shipdate", "<=", "1994-01-01"),
+    PredInfo("p_size", "=", "1")))
+  predInfoMap.put(1, mutable.HashSet(
+    PredInfo("l_shipdate", "<=", "1994-01-01")
+  ))
   var aggQidCluster = Array(1L, 2L)
   // var aggQidCluster = Array(3L)
 
-  val subQuery2 = new SubQueryInfo(qidArray, predInfoArray, aggQidCluster)
+  val subQuery2 = new SubQueryInfo(qidArray, predInfoMap, aggQidCluster)
 
   // For SubQuery 0
   qidArray = Array(0)
-  predInfoArray = new Array[PredInfo](0)
+  predInfoMap = mutable.HashMap.empty[Int, mutable.HashSet[PredInfo]]
   aggQidCluster = Array(1L)
 
-  val subQuery0 = new SubQueryInfo(qidArray, predInfoArray, aggQidCluster)
+  val subQuery0 = new SubQueryInfo(qidArray, predInfoMap, aggQidCluster)
 
   // For SubQuery 1
   qidArray = Array(1)
-  predInfoArray = new Array[PredInfo](0)
+  predInfoMap = mutable.HashMap.empty[Int, mutable.HashSet[PredInfo]]
   aggQidCluster = Array(2L)
 
-  val subQuery1 = new SubQueryInfo(qidArray, predInfoArray, aggQidCluster)
+  val subQuery1 = new SubQueryInfo(qidArray, predInfoMap, aggQidCluster)
 
   subQueryInfoArray(0) = subQuery0
   subQueryInfoArray(1) = subQuery1
@@ -61,10 +66,10 @@ object ExampleQueryInfo {
 
   private def getOneSepSubQueryInfo: SubQueryInfo = {
     val qidArray = Array(0)
-    val predInfoArray = new Array[PredInfo](0)
+    val predInfoMap = mutable.HashMap.empty[Int, mutable.HashSet[PredInfo]]
     val aggQidCluster = Array(1L)
 
-    new SubQueryInfo(qidArray, predInfoArray, aggQidCluster)
+    new SubQueryInfo(qidArray, predInfoMap, aggQidCluster)
   }
 
 }

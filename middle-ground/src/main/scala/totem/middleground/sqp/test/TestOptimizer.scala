@@ -57,7 +57,7 @@ object TestOptimizer {
       Parser.parseQuery(dfName, qid)
     }).map(Optimizer.OptimizeOneQuery)
 
-    Utils.printPlanGraph(Optimizer.OptimizeMultiQuery(queries))
+    Utils.printPlanGraph(Optimizer.OptimizeUsingBatchMQO(queries))
   }
 
 }

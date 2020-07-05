@@ -51,7 +51,7 @@ object TestDFGenerator {
       Parser.parseQuery(dfName, qid)
     }).map(Optimizer.OptimizeOneQuery)
 
-    val multiQuery = Optimizer.OptimizeMultiQuery(queries)
+    val multiQuery = Optimizer.OptimizeUsingBatchMQO(queries)
 
     Utils.printPlanGraph(multiQuery)
     QueryGenerator.printSubQueryProgram(multiQuery)

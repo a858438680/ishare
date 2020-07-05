@@ -41,6 +41,7 @@ abstract class PlanOperator (qidSet: Array[Int],
   var subQueryUID: Int = _
   var possibleOutputAttrs = mutable.HashSet.empty[TypeAttr]
   var requireOutputAttrs = mutable.HashSet.empty[TypeAttr]
+  var requireOutputArray: Array[TypeAttr] = _
 
   def setChildren(childOperators: Array[PlanOperator]): Unit = {
     this.childOps = childOperators
@@ -68,6 +69,10 @@ abstract class PlanOperator (qidSet: Array[Int],
 
   def setRequiredOutputAttrs(outputAtts: mutable.HashSet[TypeAttr]): Unit = {
     this.requireOutputAttrs = outputAtts
+  }
+
+  def genRequiredOutputArray(): Unit = {
+    this.requireOutputArray = this.requireOutputAttrs.toArray
   }
 
   def getOutputAttrs: mutable.HashSet[String] = outputAttrs

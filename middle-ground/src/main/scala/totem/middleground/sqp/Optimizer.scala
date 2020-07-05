@@ -39,7 +39,7 @@ object Optimizer {
     Catalog.initCatalog(predFile)
   }
 
-  def OptimizeMultiQuery(multiQuery: Array[PlanOperator]): Array[PlanOperator] = {
+  def OptimizeUsingSQP(multiQuery: Array[PlanOperator]): Array[PlanOperator] = {
 
     val newMultiQuery = new Array[PlanOperator](multiQuery.length)
     multiQuery.zipWithIndex.foreach(pair => {
@@ -50,6 +50,18 @@ object Optimizer {
 
     UnshareMQO(ConventionalMQO(newMultiQuery))
 
+  }
+
+  def OptimizeUsingBatchMQO(multiQuery: Array[PlanOperator]): Array[PlanOperator] = {
+
+    val newMultiQuery = new Array[PlanOperator](multiQuery.length)
+    multiQuery.zipWithIndex.foreach(pair => {
+      val op = pair._1
+      val idx = pair._2
+      newMultiQuery(idx) = OptimizeOneQuery(op)
+    })
+
+    ConventionalMQO(newMultiQuery)
   }
 
   def OptimizeOneQuery(op: PlanOperator): PlanOperator = {

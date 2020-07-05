@@ -420,12 +420,8 @@ class CandidateQuery (query_name: String, uid: String, numBatch: String, constra
 
     val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
 
-    val result = l.filter($"l_shipdate" =!= "1993-09-01" or $"l_quantity" <= 10.0)
-      .filter($"l_quantity" <= 10.0)
-      .filter($"l_quantity" === 10.0)
-      .filter($"l_quantity" =!= 10.0)
-      .filter($"l_quantity" < 10.0)
-      .filter($"l_returnflag" < "RI")
+    val result = l.filter(($"l_quantity" < 10) and ($"l_shipdate" < "1994-01-01") and
+      ($"l_returnflag" isin ("R", "S", "K")) and ($"l_linestatus" === "F"))
       .groupBy($"l_returnflag", $"l_linestatus")
       .agg(
         sum_qty($"l_quantity").as("sum_qty"),
@@ -561,19 +557,19 @@ class ServerThread (numSubQ: Int, port: Int,
 }
 
 private object AloneConfig {
-  val queryNames = Array("q5_alone", "q6_alone")
-  val numBatches = Array(2, 2)
-  val constraints = Array("0.5", "0.05")
-  val numSubQ = 2
-  val tpchSchemas = new Array[TPCHSchema](numSubQ)
-  val sharetopic = ""
-
-  // val queryNames = Array("q7")
-  // val numBatches = Array(20)
-  // val constraints = Array("0.05")
-  // val numSubQ = 1
+  // val queryNames = Array("q5_alone", "q6_alone")
+  // val numBatches = Array(2, 2)
+  // val constraints = Array("0.5", "0.05")
+  // val numSubQ = 2
   // val tpchSchemas = new Array[TPCHSchema](numSubQ)
   // val sharetopic = ""
+
+  val queryNames = Array("q7")
+  val numBatches = Array(1)
+  val constraints = Array("0.05")
+  val numSubQ = 1
+  val tpchSchemas = new Array[TPCHSchema](numSubQ)
+  val sharetopic = ""
 }
 
 private object ShareConfig {

@@ -394,10 +394,9 @@ class QueryExecution(val sparkSession: SparkSession, val logical: LogicalPlan) {
       case filter: SlothFilterExec =>
         val predInfo = SubQueryInfo.extractPredInfo(filter.condition.toString)
         val qidArray =
-          if (predInfo == null) new Array[Int](0)
-          else {
-            subQueryInfo.getPredQidArray(predInfo)
-          }
+          if (predInfo.isEmpty) new Array[Int](0)
+          else subQueryInfo.getPredQidArray(predInfo)
+
         filter.subQIDArray = qidArray
 
       case source: DataSourceV2ScanExec =>
