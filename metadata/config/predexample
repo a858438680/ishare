@@ -21,3 +21,1201 @@ Contains(cast(avrodatatocatalyst(value#94, {"type":"record","name":"topLevelReco
 
 ((((avrodatatocatalyst(value#94, {"type":"record","name":"topLevelRecord","fields":[{"name":"l_orderkey","type":["long","null"]},{"name":"l_partkey","type":["long","null"]},{"name":"l_suppkey","type":["long","null"]},{"name":"l_linenumber","type":["int","null"]},{"name":"l_quantity","type":["double","null"]},{"name":"l_extendedprice","type":["double","null"]},{"name":"l_discount","type":["double","null"]},{"name":"l_tax","type":["double","null"]},{"name":"l_returnflag","type":["string","null"]},{"name":"l_linestatus","type":["string","null"]},{"name":"l_shipdate","type":[{"type":"int","logicalType":"date"},"null"]},{"name":"l_commitdate","type":[{"type":"int","logicalType":"date"},"null"]},{"name":"l_receiptdate","type":[{"type":"int","logicalType":"date"},"null"]},{"name":"l_shipinstruct","type":["string","null"]},{"name":"l_shipmode","type":["string","null"]},{"name":"l_comment","type":["string","null"]}]}).l_quantity < 10.0) && (cast(avrodatatocatalyst(value#94, {"type":"record","name":"topLevelRecord","fields":[{"name":"l_orderkey","type":["long","null"]},{"name":"l_partkey","type":["long","null"]},{"name":"l_suppkey","type":["long","null"]},{"name":"l_linenumber","type":["int","null"]},{"name":"l_quantity","type":["double","null"]},{"name":"l_extendedprice","type":["double","null"]},{"name":"l_discount","type":["double","null"]},{"name":"l_tax","type":["double","null"]},{"name":"l_returnflag","type":["string","null"]},{"name":"l_linestatus","type":["string","null"]},{"name":"l_shipdate","type":[{"type":"int","logicalType":"date"},"null"]},{"name":"l_commitdate","type":[{"type":"int","logicalType":"date"},"null"]},{"name":"l_receiptdate","type":[{"type":"int","logicalType":"date"},"null"]},{"name":"l_shipinstruct","type":["string","null"]},{"name":"l_shipmode","type":["string","null"]},{"name":"l_comment","type":["string","null"]}]}).l_shipdate as string) < 1994-01-01)) && avrodatatocatalyst(value#94, {"type":"record","name":"topLevelRecord","fields":[{"name":"l_orderkey","type":["long","null"]},{"name":"l_partkey","type":["long","null"]},{"name":"l_suppkey","type":["long","null"]},{"name":"l_linenumber","type":["int","null"]},{"name":"l_quantity","type":["double","null"]},{"name":"l_extendedprice","type":["double","null"]},{"name":"l_discount","type":["double","null"]},{"name":"l_tax","type":["double","null"]},{"name":"l_returnflag","type":["string","null"]},{"name":"l_linestatus","type":["string","null"]},{"name":"l_shipdate","type":[{"type":"int","logicalType":"date"},"null"]},{"name":"l_commitdate","type":[{"type":"int","logicalType":"date"},"null"]},{"name":"l_receiptdate","type":[{"type":"int","logicalType":"date"},"null"]},{"name":"l_shipinstruct","type":["string","null"]},{"name":"l_shipmode","type":["string","null"]},{"name":"l_comment","type":["string","null"]}]}).l_returnflag IN (R,S,K)) && (avrodatatocatalyst(value#94, {"type":"record","name":"topLevelRecord","fields":[{"name":"l_orderkey","type":["long","null"]},{"name":"l_partkey","type":["long","null"]},{"name":"l_suppkey","type":["long","null"]},{"name":"l_linenumber","type":["int","null"]},{"name":"l_quantity","type":["double","null"]},{"name":"l_extendedprice","type":["double","null"]},{"name":"l_discount","type":["double","null"]},{"name":"l_tax","type":["double","null"]},{"name":"l_returnflag","type":["string","null"]},{"name":"l_linestatus","type":["string","null"]},{"name":"l_shipdate","type":[{"type":"int","logicalType":"date"},"null"]},{"name":"l_commitdate","type":[{"type":"int","logicalType":"date"},"null"]},{"name":"l_receiptdate","type":[{"type":"int","logicalType":"date"},"null"]},{"name":"l_shipinstruct","type":["string","null"]},{"name":"l_shipmode","type":["string","null"]},{"name":"l_comment","type":["string","null"]}]}).l_linestatus = F))
 
+
+
+Questionable queries
+
+1. Q22_15_19_6_21_14
+2. Q26_9_16_2_17_20_8
+
+
+execute RDD 1982 ms
+{
+  "id" : "58185226-e0cf-45fd-8202-ccb037086109",
+  "runId" : "1e180ca0-e63f-4c80-809d-8699447b97fd",
+  "name" : "Q27_3_22",
+  "timestamp" : "2020-07-05T22:47:14.608Z",
+  "batchId" : 0,
+  "numInputRows" : 15000,
+  "ProcessTime" : 1907.0,
+  "processedRowsPerSecond" : 7.865757734661773,
+  "totalProcessTime" : 1907.0,
+  "sink" : {
+    "description" : "org.apache.spark.sql.kafka010.KafkaSourceProvider@16f7e442"
+  }
+}
+SlothFilter [numOfRows: 3,741]
+	SlothFilter [numOfRows: 3,741]
+		DataSourceV2Scan [numOfRows: 15,000]
+execute RDD 6853 ms
+-------------------------------------------
+Batch: 0
+-------------------------------------------
++------------+------------+---------+--------------------+--------------------+--------------------+------------------+------------------+--------------------+-----------+
+|l_returnflag|l_linestatus|  sum_qty|      sum_base_price|      sum_disc_price|          sum_charge|           avg_qty|         avg_price|            avg_disc|count_order|
++------------+------------+---------+--------------------+--------------------+--------------------+------------------+------------------+--------------------+-----------+
+|           R|           F|3785523.0| 2.661319935280007E8| 5.071818532942074E9| 5.274405503049401E9|  25.5259438574251| 35994.02921403015|0.049989278561897284|     148301|
+|           N|           F|  95257.0|  6605423.1888000015|1.2713237265120038E8|1.3228629122944494E8| 25.30066401062417|35521.326916334765|0.049394422310757316|       3765|
+|           A|           F|3774200.0|2.6665761400720075E8| 5.054096266682767E9|5.2567513314492655E9|25.537587116854997| 36002.12382901449| 0.05014459706345491|     147790|
+|           N|           O|7454519.0|5.2569279734540075E8| 9.979830780624516E9|1.037889712594872...| 25.54518413937502|  36000.3823559637|0.050097012854021856|     291817|
++------------+------------+---------+--------------------+--------------------+--------------------+------------------+------------------+--------------------+-----------+
+
+{
+  "id" : "af502945-6cb5-4700-a51e-7394d0613fe0",
+  "runId" : "46c244fe-6b2e-49aa-b019-ace5a9afa123",
+  "name" : "Q1_1",
+  "timestamp" : "2020-07-05T22:47:18.751Z",
+  "batchId" : 0,
+  "numInputRows" : 600572,
+  "ProcessTime" : 6768.0,
+  "processedRowsPerSecond" : 88.7369976359338,
+  "totalProcessTime" : 6768.0,
+  "sink" : {
+    "description" : "org.apache.spark.sql.execution.streaming.ConsoleSinkProvider@3f8463ed"
+  }
+}
+SlothHashAggregate [numOfRows: 4]
+	SlothFilter [numOfRows: 591,673]
+		DataSourceV2Scan [numOfRows: 600,572]
+execute RDD 11761 ms
+{
+  "id" : "ed5a9670-9f40-46d2-b4bd-5332fd960e92",
+  "runId" : "164cc692-3629-4a48-91b2-dd407de10606",
+  "name" : "Q31_12_7",
+  "timestamp" : "2020-07-05T22:47:26.449Z",
+  "batchId" : 0,
+  "numInputRows" : 750572,
+  "ProcessTime" : 11656.0,
+  "processedRowsPerSecond" : 64.3936170212766,
+  "totalProcessTime" : 11656.0,
+  "sink" : {
+    "description" : "org.apache.spark.sql.kafka010.KafkaSourceProvider@2df18abc"
+  }
+}
+SlothSymmetricHashJoin [numOfRows: 182,770]
+	SlothFilter [numOfRows: 182,770]
+		SlothFilter [numOfRows: 182,770]
+			SlothFilter [numOfRows: 600,572]
+				DataSourceV2Scan [numOfRows: 600,572]
+	SlothFilter [numOfRows: 150,000]
+		DataSourceV2Scan [numOfRows: 150,000]
+execute RDD 506 ms
+{
+  "id" : "535b558f-81c5-49f2-ba11-c1ff532a486f",
+  "runId" : "f2ae8514-80a0-4533-bcc2-fd0a75eaf87e",
+  "name" : "Q24_5_2",
+  "timestamp" : "2020-07-05T22:47:38.935Z",
+  "batchId" : 0,
+  "numInputRows" : 1030,
+  "ProcessTime" : 371.0,
+  "processedRowsPerSecond" : 2.7762803234501345,
+  "totalProcessTime" : 371.0,
+  "sink" : {
+    "description" : "org.apache.spark.sql.kafka010.KafkaSourceProvider@3a358de6"
+  }
+}
+SlothSymmetricHashJoin [numOfRows: 429]
+	SlothSymmetricHashJoin [numOfRows: 10]
+		SlothFilter [numOfRows: 2]
+			SlothFilter [numOfRows: 2]
+				SlothFilter [numOfRows: 5]
+					DataSourceV2Scan [numOfRows: 5]
+		SlothFilter [numOfRows: 25]
+			SlothFilter [numOfRows: 25]
+				DataSourceV2Scan [numOfRows: 25]
+	SlothFilter [numOfRows: 1,000]
+		DataSourceV2Scan [numOfRows: 1,000]
+execute RDD 6402 ms
+{
+  "id" : "ecd74234-95df-4f36-b3b6-0a7401db4541",
+  "runId" : "c83a3cc7-b1d4-4129-864b-732e706498db",
+  "name" : "Q28_9_13_5_18_10_4_22_8",
+  "timestamp" : "2020-07-05T22:47:40.375Z",
+  "batchId" : 0,
+  "numInputRows" : 150000,
+  "ProcessTime" : 6317.0,
+  "processedRowsPerSecond" : 23.745448788982113,
+  "totalProcessTime" : 6317.0,
+  "sink" : {
+    "description" : "org.apache.spark.sql.kafka010.KafkaSourceProvider@140b22a"
+  }
+}
+SlothFilter [numOfRows: 150,000]
+	SlothFilter [numOfRows: 150,000]
+		SlothFilter [numOfRows: 150,000]
+			SlothFilter [numOfRows: 150,000]
+				DataSourceV2Scan [numOfRows: 150,000]
+execute RDD 4358 ms
+{
+  "id" : "e4006462-6ff8-4303-a52a-a9098e3fce3e",
+  "runId" : "94928d8c-3391-45ab-959c-fec89b029a0a",
+  "name" : "Q22_15_19_6_21_14",
+  "timestamp" : "2020-07-05T22:47:47.587Z",
+  "batchId" : 0,
+  "numInputRows" : 600572,
+  "ProcessTime" : 4268.0,
+  "processedRowsPerSecond" : 140.71508903467665,
+  "totalProcessTime" : 4268.0,
+  "sink" : {
+    "description" : "org.apache.spark.sql.kafka010.KafkaSourceProvider@52b06c11"
+  }
+}
+SlothFilter [numOfRows: 398]
+	SlothFilter [numOfRows: 398]
+		SlothFilter [numOfRows: 11,649]
+			SlothFilter [numOfRows: 11,649]
+				SlothFilter [numOfRows: 11,649]
+					DataSourceV2Scan [numOfRows: 600,572]
+execute RDD 761 ms
+{
+  "id" : "be079533-f73c-4302-a400-60553d19c304",
+  "runId" : "c31b6322-7996-4761-917a-8205ac93385b",
+  "name" : "Q26_9_16_2_17_20_8",
+  "timestamp" : "2020-07-05T22:47:52.823Z",
+  "batchId" : 0,
+  "numInputRows" : 20000,
+  "ProcessTime" : 666.0,
+  "processedRowsPerSecond" : 30.03003003003003,
+  "totalProcessTime" : 666.0,
+  "sink" : {
+    "description" : "org.apache.spark.sql.kafka010.KafkaSourceProvider@608b95b8"
+  }
+}
+SlothFilter [numOfRows: 4,239]
+	SlothFilter [numOfRows: 20,000]
+		SlothFilter [numOfRows: 20,000]
+			SlothFilter [numOfRows: 20,000]
+				SlothFilter [numOfRows: 20,000]
+					SlothFilter [numOfRows: 20,000]
+						DataSourceV2Scan [numOfRows: 20,000]
+execute RDD 60 ms
+{
+  "id" : "a4abb387-17a9-46d4-a0ae-1f6580e694ea",
+  "runId" : "82d7fd07-8d5b-430a-8249-abb19ef6fc6e",
+  "name" : "Q23_20_21_11",
+  "timestamp" : "2020-07-05T22:47:53.966Z",
+  "batchId" : 0,
+  "numInputRows" : 25,
+  "ProcessTime" : -20.0,
+  "processedRowsPerSecond" : -1.25,
+  "totalProcessTime" : -20.0,
+  "sink" : {
+    "description" : "org.apache.spark.sql.kafka010.KafkaSourceProvider@1fddb700"
+  }
+}
+SlothFilter [numOfRows: 3]
+	SlothFilter [numOfRows: 25]
+		SlothFilter [numOfRows: 25]
+			DataSourceV2Scan [numOfRows: 25]
+execute RDD 1683 ms
+-------------------------------------------
+Batch: 0
+-------------------------------------------
++------+-------+
+|s_name|numwait|
++------+-------+
++------+-------+
+
+{
+  "id" : "9275e2bb-7995-439e-a0fa-37648073f79b",
+  "runId" : "171f1804-7106-46b5-9ad6-a26404570412",
+  "name" : "Q0_21",
+  "timestamp" : "2020-07-05T22:47:54.264Z",
+  "batchId" : 0,
+  "numInputRows" : 151790,
+  "ProcessTime" : 1458.0,
+  "processedRowsPerSecond" : 104.10836762688615,
+  "totalProcessTime" : 1458.0,
+  "sink" : {
+    "description" : "org.apache.spark.sql.execution.streaming.ConsoleSinkProvider@7a3f1068"
+  }
+}
+SlothHashAggregate [numOfRows: 0]
+	SlothSymmetricHashJoin [numOfRows: 0]
+		SlothSymmetricHashJoin [numOfRows: 0]
+			SlothSymmetricHashJoin [numOfRows: 11]
+				SlothSymmetricHashJoin [numOfRows: 263]
+					SlothSymmetricHashJoin [numOfRows: 263]
+						SlothFilter [numOfRows: 263]
+							SlothFilter [numOfRows: 263]
+								DataSourceV2Scan [numOfRows: 263]
+						SlothFilter [numOfRows: 72,884]
+							SlothFilter [numOfRows: 72,884]
+								DataSourceV2Scan [numOfRows: 150,000]
+					SlothFilter [numOfRows: 1,000]
+						SlothFilter [numOfRows: 1,000]
+							DataSourceV2Scan [numOfRows: 1,000]
+				SlothFilter [numOfRows: 1]
+					DataSourceV2Scan [numOfRows: 1]
+			SlothFilter [numOfRows: 263]
+				DataSourceV2Scan [numOfRows: 263]
+		SlothFilter [numOfRows: 263]
+			DataSourceV2Scan [numOfRows: 263]
+execute RDD 12650 ms
+{
+  "id" : "7ac469a1-d67c-42db-a5a8-1c646cef2764",
+  "runId" : "1de2e265-dfaa-4722-82c7-15ff87d3d7f7",
+  "name" : "Q30_9_5_18_10_8",
+  "timestamp" : "2020-07-05T22:47:57.765Z",
+  "batchId" : 0,
+  "numInputRows" : 750572,
+  "ProcessTime" : 12550.0,
+  "processedRowsPerSecond" : 59.806533864541834,
+  "totalProcessTime" : 12550.0,
+  "sink" : {
+    "description" : "org.apache.spark.sql.kafka010.KafkaSourceProvider@23b51937"
+  }
+}
+SlothSymmetricHashJoin [numOfRows: 600,572]
+	SlothFilter [numOfRows: 600,572]
+		SlothFilter [numOfRows: 600,572]
+			DataSourceV2Scan [numOfRows: 600,572]
+	SlothFilter [numOfRows: 150,000]
+		DataSourceV2Scan [numOfRows: 150,000]
+execute RDD 12664 ms
+-------------------------------------------
+Batch: 0
+-------------------------------------------
++------------------+
+|        avg_yearly|
++------------------+
+|23512.752857142852|
++------------------+
+
+{
+  "id" : "406e6037-2b7c-4c08-9fb9-7260438b9841",
+  "runId" : "10a5cccf-60d4-4441-97f8-138b937bc914",
+  "name" : "Q17_17",
+  "timestamp" : "2020-07-05T22:48:10.942Z",
+  "batchId" : 0,
+  "numInputRows" : 1201162,
+  "ProcessTime" : 12509.0,
+  "processedRowsPerSecond" : 96.02382284754977,
+  "totalProcessTime" : 12509.0,
+  "sink" : {
+    "description" : "org.apache.spark.sql.execution.streaming.ConsoleSinkProvider@5a0c39d8"
+  }
+}
+SlothHashAggregate [numOfRows: 1]
+	SlothSymmetricHashJoin [numOfRows: 43]
+		SlothSymmetricHashJoin [numOfRows: 53,388]
+			SlothFilter [numOfRows: 600,572]
+				DataSourceV2Scan [numOfRows: 600,572]
+			SlothFilter [numOfRows: 20,000]
+				SlothHashAggregate [numOfRows: 20,000]
+					SlothFilter [numOfRows: 600,572]
+						DataSourceV2Scan [numOfRows: 600,572]
+		SlothFilter [numOfRows: 18]
+			DataSourceV2Scan [numOfRows: 18]
+execute RDD 6033 ms
+-------------------------------------------
+Batch: 0
+-------------------------------------------
++----------+------------------+-----------+--------------+
+|l_orderkey|           revenue|o_orderdate|o_shippriority|
++----------+------------------+-----------+--------------+
+|    387329|       104209.3694| 1995-03-04|             0|
+|    573056|        137702.286| 1995-02-24|             0|
+|     32484|        45480.2065| 1995-02-05|             0|
+|    525121|        71692.5765| 1995-03-11|             0|
+|    481798|       115462.4656| 1995-02-26|             0|
+|    393895|12433.217499999999| 1995-01-04|             0|
+|    106790|         84345.433| 1994-12-27|             0|
+|    277826|58233.344999999994| 1995-01-25|             0|
+|    290471| 97519.62160000001| 1995-01-26|             0|
+|     42117| 77636.60639999999| 1995-02-19|             0|
+|     88967|         45127.795| 1994-12-30|             0|
+|    284134| 8536.205999999998| 1995-03-08|             0|
+|    187106|        97015.0608| 1995-01-15|             0|
+|    429090|         36693.648| 1995-03-06|             0|
+|    416833| 64031.92479999999| 1995-01-26|             0|
+|     24960|        267749.428| 1995-01-28|             0|
+|    593124|188997.60259999998| 1995-02-17|             0|
+|    323365|        20810.5857| 1994-12-13|             0|
+|    542754|        29833.9392| 1995-01-16|             0|
+|    436613|        103476.236| 1995-01-21|             0|
++----------+------------------+-----------+--------------+
+only showing top 20 rows
+
+{
+  "id" : "53340672-ca9c-401a-9a5a-445c46f804cb",
+  "runId" : "6e5016ec-69eb-4f0e-be5a-0a2dadc09c50",
+  "name" : "Q3_3",
+  "timestamp" : "2020-07-05T22:48:24.847Z",
+  "batchId" : 0,
+  "numInputRows" : 751350,
+  "ProcessTime" : 5883.0,
+  "processedRowsPerSecond" : 127.71545130035696,
+  "totalProcessTime" : 5883.0,
+  "sink" : {
+    "description" : "org.apache.spark.sql.execution.streaming.ConsoleSinkProvider@706d10eb"
+  }
+}
+SlothHashAggregate [numOfRows: 310]
+	SlothSymmetricHashJoin [numOfRows: 795]
+		SlothSymmetricHashJoin [numOfRows: 3,856]
+			SlothFilter [numOfRows: 778]
+				DataSourceV2Scan [numOfRows: 778]
+			SlothFilter [numOfRows: 72,678]
+				SlothFilter [numOfRows: 72,678]
+					SlothFilter [numOfRows: 72,678]
+						DataSourceV2Scan [numOfRows: 150,000]
+		SlothFilter [numOfRows: 324,322]
+			SlothFilter [numOfRows: 324,322]
+				DataSourceV2Scan [numOfRows: 600,572]
+execute RDD 1105 ms
+{
+  "id" : "1b59f8cd-817e-4c66-bf94-c172c8dbfdf9",
+  "runId" : "174d457d-3cee-478d-8707-900262135816",
+  "name" : "Q25_16_2",
+  "timestamp" : "2020-07-05T22:48:32.301Z",
+  "batchId" : 0,
+  "numInputRows" : 83075,
+  "ProcessTime" : 1010.0,
+  "processedRowsPerSecond" : 82.25247524752476,
+  "totalProcessTime" : 1010.0,
+  "sink" : {
+    "description" : "org.apache.spark.sql.kafka010.KafkaSourceProvider@793fb449"
+  }
+}
+SlothSymmetricHashJoin [numOfRows: 12,300]
+	SlothFilter [numOfRows: 80,000]
+		DataSourceV2Scan [numOfRows: 80,000]
+	SlothFilter [numOfRows: 3,075]
+		DataSourceV2Scan [numOfRows: 3,075]
+execute RDD 6292 ms
+-------------------------------------------
+Batch: 0
+-------------------------------------------
++---------------+-----------+
+|o_orderpriority|order_count|
++---------------+-----------+
+|         2-HIGH|       1012|
+|4-NOT SPECIFIED|       1006|
+|       3-MEDIUM|       1041|
+|       1-URGENT|       1013|
+|          5-LOW|       1093|
++---------------+-----------+
+
+{
+  "id" : "a6e08553-5e5b-430a-b319-1d1cde57045f",
+  "runId" : "30836271-d635-49fe-8c0d-03ce177cef42",
+  "name" : "Q4_4",
+  "timestamp" : "2020-07-05T22:48:33.776Z",
+  "batchId" : 0,
+  "numInputRows" : 606203,
+  "ProcessTime" : 6177.0,
+  "processedRowsPerSecond" : 98.13874048891047,
+  "totalProcessTime" : 6177.0,
+  "sink" : {
+    "description" : "org.apache.spark.sql.execution.streaming.ConsoleSinkProvider@42e02b2c"
+  }
+}
+SlothHashAggregate [numOfRows: 5]
+	SlothSymmetricHashJoin [numOfRows: 5,165]
+		SlothFilter [numOfRows: 5,631]
+			DataSourceV2Scan [numOfRows: 5,631]
+		SlothFilter [numOfRows: 379,809]
+			SlothFilter [numOfRows: 379,809]
+				DataSourceV2Scan [numOfRows: 600,572]
+execute RDD 935 ms
+{
+  "id" : "48a55bed-3ecb-4268-bf69-97b1633f2562",
+  "runId" : "7ad68609-8e1a-499c-8d0b-0be966e17da6",
+  "name" : "Q33_11",
+  "timestamp" : "2020-07-05T22:48:40.880Z",
+  "batchId" : 0,
+  "numInputRows" : 81001,
+  "ProcessTime" : 810.0,
+  "processedRowsPerSecond" : 100.00123456790124,
+  "totalProcessTime" : 810.0,
+  "sink" : {
+    "description" : "org.apache.spark.sql.kafka010.KafkaSourceProvider@2955dadb"
+  }
+}
+SlothSymmetricHashJoin [numOfRows: 4,000]
+	SlothSymmetricHashJoin [numOfRows: 50]
+		SlothFilter [numOfRows: 1,000]
+			SlothFilter [numOfRows: 1,000]
+				DataSourceV2Scan [numOfRows: 1,000]
+		SlothFilter [numOfRows: 1]
+			DataSourceV2Scan [numOfRows: 1]
+	SlothFilter [numOfRows: 80,000]
+		DataSourceV2Scan [numOfRows: 80,000]
+execute RDD 308 ms
+-------------------------------------------
+Batch: 0
+-------------------------------------------
++----------+---------------+--------------+
+|l_shipmode|high_line_count|low_line_count|
++----------+---------------+--------------+
+|      MAIL|              5|             3|
++----------+---------------+--------------+
+
+{
+  "id" : "da34eb77-4b9a-4eb3-98cf-bf5f602f0319",
+  "runId" : "f44e3ebf-7816-4eb2-91be-054cd45136b7",
+  "name" : "Q12_12",
+  "timestamp" : "2020-07-05T22:48:42.515Z",
+  "batchId" : 0,
+  "numInputRows" : 8,
+  "ProcessTime" : 228.0,
+  "processedRowsPerSecond" : 0.03508771929824561,
+  "totalProcessTime" : 228.0,
+  "sink" : {
+    "description" : "org.apache.spark.sql.execution.streaming.ConsoleSinkProvider@6b2804d6"
+  }
+}
+SlothHashAggregate [numOfRows: 1]
+	DataSourceV2Scan [numOfRows: 8]
+execute RDD 443 ms
+-------------------------------------------
+Batch: 0
+-------------------------------------------
++---------+
+|  revenue|
++---------+
+|15283.062|
++---------+
+
+{
+  "id" : "7b94c017-5fae-45b2-b2bb-61970e3cecbf",
+  "runId" : "b3edc662-6853-425f-93a1-1b84e7be3dc8",
+  "name" : "Q19_19",
+  "timestamp" : "2020-07-05T22:48:43.185Z",
+  "batchId" : 0,
+  "numInputRows" : 20398,
+  "ProcessTime" : 328.0,
+  "processedRowsPerSecond" : 62.1890243902439,
+  "totalProcessTime" : 328.0,
+  "sink" : {
+    "description" : "org.apache.spark.sql.execution.streaming.ConsoleSinkProvider@78642ac4"
+  }
+}
+SlothHashAggregate [numOfRows: 1]
+	SlothSymmetricHashJoin [numOfRows: 1]
+		SlothFilter [numOfRows: 398]
+			DataSourceV2Scan [numOfRows: 398]
+		SlothFilter [numOfRows: 20,000]
+			SlothFilter [numOfRows: 20,000]
+				DataSourceV2Scan [numOfRows: 20,000]
+execute RDD 82 ms
+{
+  "id" : "dce9ac38-d805-47dc-8c96-79ec0374530f",
+  "runId" : "3288b965-f6c2-4c6f-bcaf-b8aaffc1420d",
+  "name" : "Q34_15",
+  "timestamp" : "2020-07-05T22:48:44.323Z",
+  "batchId" : 0,
+  "numInputRows" : 0,
+  "ProcessTime" : 2.0,
+  "processedRowsPerSecond" : 0.0,
+  "totalProcessTime" : 2.0,
+  "sink" : {
+    "description" : "org.apache.spark.sql.kafka010.KafkaSourceProvider@70624dc0"
+  }
+}
+SlothHashAggregate [numOfRows: 0]
+	DataSourceV2Scan [numOfRows: 0]
+execute RDD 1505 ms
+-------------------------------------------
+Batch: 0
+-------------------------------------------
++-------+--------+
+|c_count|custdist|
++-------+--------+
+|     26|     164|
+|      8|     543|
+|      4|      87|
+|     19|     453|
+|     14|     450|
+|     24|     282|
+|     33|      10|
+|     34|       7|
+|     29|      65|
+|      2|      10|
+|     12|     555|
+|     25|     208|
+|      5|     180|
+|     17|     420|
+|     27|     144|
+|     23|     335|
+|     16|     439|
+|     28|     114|
+|     15|     437|
+|     18|     460|
++-------+--------+
+only showing top 20 rows
+
+{
+  "id" : "a1caf225-8e86-4485-8ecf-81c7c247a58d",
+  "runId" : "3f1cd9de-bc74-4a17-aa67-1b37fd2b04e0",
+  "name" : "Q13_13",
+  "timestamp" : "2020-07-05T22:48:44.705Z",
+  "batchId" : 0,
+  "numInputRows" : 165000,
+  "ProcessTime" : 1385.0,
+  "processedRowsPerSecond" : 119.13357400722022,
+  "totalProcessTime" : 1385.0,
+  "sink" : {
+    "description" : "org.apache.spark.sql.execution.streaming.ConsoleSinkProvider@713c59c4"
+  }
+}
+SlothHashAggregate [numOfRows: 37]
+	SlothHashAggregate [numOfRows: 15,000]
+		SlothSymmetricHashJoin [numOfRows: 155,000]
+			DataSourceV2Scan [numOfRows: 15,000]
+			SlothFilter [numOfRows: 150,000]
+				DataSourceV2Scan [numOfRows: 150,000]
+execute RDD 7818 ms
+-------------------------------------------
+Batch: 0
+-------------------------------------------
++------------------+--------------------+
+|            s_name|           s_address|
++------------------+--------------------+
+|Supplier#000000378|  FfbhyCxWvcPrO8ltp9|
+|Supplier#000000197|YC2Acon6kjY3zj3Fb...|
+|Supplier#000000157|         ,mEGorBfVIm|
+|Supplier#000000555|TfB,a5bfl3Ah 3Z 7...|
+|Supplier#000000729|pqck2ppy758TQpZCU...|
+|Supplier#000000935|ij98czM 2KzWe7dDT...|
+|Supplier#000000287|   7a9SP7qW5Yku5PvSg|
+|Supplier#000000557|jj0wUYh9K3fG5Jhdh...|
+|Supplier#000000530|0qwCMwobKY OcmLyf...|
++------------------+--------------------+
+
+{
+  "id" : "b34b7504-0598-4da5-bd36-1091a14638ff",
+  "runId" : "1089647d-1a37-4117-9b3c-2a1001de9d57",
+  "name" : "Q20_20",
+  "timestamp" : "2020-07-05T22:48:46.979Z",
+  "batchId" : 0,
+  "numInputRows" : 681763,
+  "ProcessTime" : 7618.0,
+  "processedRowsPerSecond" : 89.49369913363087,
+  "totalProcessTime" : 7618.0,
+  "sink" : {
+    "description" : "org.apache.spark.sql.execution.streaming.ConsoleSinkProvider@6084f76c"
+  }
+}
+SlothSymmetricHashJoin [numOfRows: 9]
+	SlothSymmetricHashJoin [numOfRows: 405]
+		SlothFilter [numOfRows: 1,000]
+			SlothFilter [numOfRows: 1,000]
+				DataSourceV2Scan [numOfRows: 1,000]
+		SlothSymmetricHashJoin [numOfRows: 521]
+			SlothSymmetricHashJoin [numOfRows: 54,410]
+				SlothFilter [numOfRows: 80,000]
+					DataSourceV2Scan [numOfRows: 80,000]
+				SlothFilter [numOfRows: 54,539]
+					SlothHashAggregate [numOfRows: 54,539]
+						SlothFilter [numOfRows: 92,040]
+							SlothFilter [numOfRows: 92,040]
+								DataSourceV2Scan [numOfRows: 600,572]
+			SlothFilter [numOfRows: 190]
+				DataSourceV2Scan [numOfRows: 190]
+	SlothFilter [numOfRows: 1]
+		DataSourceV2Scan [numOfRows: 1]
+execute RDD 62 ms
+-------------------------------------------
+Batch: 0
+-------------------------------------------
++------------------+
+|           revenue|
++------------------+
+|387702.02620000014|
++------------------+
+
+{
+  "id" : "22afa940-79eb-4c6d-9417-1236806772e5",
+  "runId" : "49b4167b-1010-4d20-8e3b-7645101e6945",
+  "name" : "Q6_6",
+  "timestamp" : "2020-07-05T22:48:56.237Z",
+  "batchId" : 0,
+  "numInputRows" : 398,
+  "ProcessTime" : -18.0,
+  "processedRowsPerSecond" : -22.11111111111111,
+  "totalProcessTime" : -18.0,
+  "sink" : {
+    "description" : "org.apache.spark.sql.execution.streaming.ConsoleSinkProvider@3fe3c5a7"
+  }
+}
+SlothHashAggregate [numOfRows: 1]
+	DataSourceV2Scan [numOfRows: 398]
+execute RDD 9250 ms
+-------------------------------------------
+Batch: 0
+-------------------------------------------
++---------+-------+-----------------+
+|cntrycode|numcust|     totalacctbal|
++---------+-------+-----------------+
+|       29|     85|632693.4599999998|
+|       17|     96|722560.1499999999|
+|       31|     87|647372.4999999997|
+|       13|     94|        714035.05|
+|       23|     93|708285.2499999998|
+|       18|     99|738012.5200000004|
+|       30|     87|646748.0200000003|
++---------+-------+-----------------+
+
+{
+  "id" : "bc78b630-8b48-413b-b670-684ca8df9b05",
+  "runId" : "ecf7fee2-d5fd-43b1-92dc-2af85b1081c1",
+  "name" : "Q21_22",
+  "timestamp" : "2020-07-05T22:48:58.856Z",
+  "batchId" : 0,
+  "numInputRows" : 157482,
+  "ProcessTime" : 9100.0,
+  "processedRowsPerSecond" : 17.30571428571428,
+  "totalProcessTime" : 9100.0,
+  "sink" : {
+    "description" : "org.apache.spark.sql.execution.streaming.ConsoleSinkProvider@c25ab2e"
+  }
+}
+SlothHashAggregate [numOfRows: 7]
+	SlothThetaJoin [numOfRows: 641]
+		SlothSymmetricHashJoin [numOfRows: 1,237]
+			SlothFilter [numOfRows: 3,741]
+				DataSourceV2Scan [numOfRows: 3,741]
+			SlothFilter [numOfRows: 150,000]
+				DataSourceV2Scan [numOfRows: 150,000]
+		SlothFilter [numOfRows: 1]
+			SlothHashAggregate [numOfRows: 1]
+				DataSourceV2Scan [numOfRows: 3,741]
+execute RDD 3698 ms
+-------------------------------------------
+Batch: 0
+-------------------------------------------
++-----------+-----------+------+------------------+
+|supp_nation|cust_nation|l_year|           revenue|
++-----------+-----------+------+------------------+
+|     FRANCE|    GERMANY|  1995|4637235.1500999965|
+|    GERMANY|     FRANCE|  1996| 5557312.112099997|
+|    GERMANY|     FRANCE|  1995| 6232818.703700004|
+|     FRANCE|    GERMANY|  1996| 5224779.573599997|
++-----------+-----------+------+------------------+
+
+{
+  "id" : "78b495f5-8ba9-40f7-97b8-d5190d4bfd5a",
+  "runId" : "b4012ce2-cbeb-4045-b6c8-69191ce7ecf4",
+  "name" : "Q7_7",
+  "timestamp" : "2020-07-05T22:49:16.828Z",
+  "batchId" : 0,
+  "numInputRows" : 198812,
+  "ProcessTime" : 3498.0,
+  "processedRowsPerSecond" : 56.83590623213265,
+  "totalProcessTime" : 3498.0,
+  "sink" : {
+    "description" : "org.apache.spark.sql.execution.streaming.ConsoleSinkProvider@413f9b75"
+  }
+}
+SlothHashAggregate [numOfRows: 4]
+	SlothSymmetricHashJoin [numOfRows: 643]
+		SlothSymmetricHashJoin [numOfRows: 182,762]
+			SlothSymmetricHashJoin [numOfRows: 182,762]
+				SlothSymmetricHashJoin [numOfRows: 182,762]
+					SlothFilter [numOfRows: 182,762]
+						SlothFilter [numOfRows: 182,762]
+							DataSourceV2Scan [numOfRows: 182,762]
+					SlothFilter [numOfRows: 15,000]
+						SlothFilter [numOfRows: 15,000]
+							DataSourceV2Scan [numOfRows: 15,000]
+				SlothFilter [numOfRows: 1,000]
+					SlothFilter [numOfRows: 1,000]
+						DataSourceV2Scan [numOfRows: 1,000]
+			SlothFilter [numOfRows: 25]
+				DataSourceV2Scan [numOfRows: 25]
+		SlothFilter [numOfRows: 25]
+			DataSourceV2Scan [numOfRows: 25]
+execute RDD 354 ms
+-------------------------------------------
+Batch: 0
+-------------------------------------------
++-------------+
+|promo_revenue|
++-------------+
++-------------+
+
+{
+  "id" : "8fb4194b-14d8-4465-a506-3fa4f728fb38",
+  "runId" : "5ecd38c5-fb5f-4878-8ddf-19ed7766430d",
+  "name" : "Q14_14",
+  "timestamp" : "2020-07-05T22:49:30.664Z",
+  "batchId" : 0,
+  "numInputRows" : 20000,
+  "ProcessTime" : 244.0,
+  "processedRowsPerSecond" : 81.9672131147541,
+  "totalProcessTime" : 244.0,
+  "sink" : {
+    "description" : "org.apache.spark.sql.execution.streaming.ConsoleSinkProvider@5a640a55"
+  }
+}
+SlothHashAggregate [numOfRows: 0]
+	SlothSymmetricHashJoin [numOfRows: 0]
+		SlothFilter [numOfRows: 0]
+			DataSourceV2Scan [numOfRows: 0]
+		SlothFilter [numOfRows: 20,000]
+			DataSourceV2Scan [numOfRows: 20,000]
+Sort Time 7 ms, 0 keys
+execute RDD 188 ms
+-------------------------------------------
+Batch: 0
+-------------------------------------------
++---------+------+---------+-------+-------------+
+|s_suppkey|s_name|s_address|s_phone|total_revenue|
++---------+------+---------+-------+-------------+
++---------+------+---------+-------+-------------+
+
+{
+  "id" : "937fd0da-8693-4234-a52a-2615bd90b02e",
+  "runId" : "e8bbb71d-39b5-4087-a0df-35ceb54a617b",
+  "name" : "Q15_15",
+  "timestamp" : "2020-07-05T22:49:32.319Z",
+  "batchId" : 0,
+  "numInputRows" : 1000,
+  "ProcessTime" : 48.0,
+  "processedRowsPerSecond" : 20.833333333333332,
+  "totalProcessTime" : 48.0,
+  "sink" : {
+    "description" : "org.apache.spark.sql.execution.streaming.ConsoleSinkProvider@4cbbe57e"
+  }
+}
+SlothThetaJoin [numOfRows: 0]
+	SlothSymmetricHashJoin [numOfRows: 0]
+		SlothFilter [numOfRows: 1,000]
+			DataSourceV2Scan [numOfRows: 1,000]
+		SlothFilter [numOfRows: 0]
+			SlothFilter [numOfRows: 0]
+				DataSourceV2Scan [numOfRows: 0]
+	SlothFilter [numOfRows: 0]
+		SlothHashAggregate [numOfRows: 0]
+			DataSourceV2Scan [numOfRows: 0]
+execute RDD 343 ms
+-------------------------------------------
+Batch: 0
+-------------------------------------------
++--------+--------------------+------+------------+
+| p_brand|              p_type|p_size|supplier_cnt|
++--------+--------------------+------+------------+
+|Brand#25|MEDIUM BURNISHED TIN|    36|           4|
+|Brand#24| PROMO BRUSHED BRASS|    19|           4|
+|Brand#24|    LARGE PLATED TIN|    19|           4|
+|Brand#13|STANDARD POLISHED...|    14|           4|
+|Brand#34|MEDIUM PLATED COPPER|    36|           4|
+|Brand#33|ECONOMY POLISHED ...|    14|           4|
+|Brand#41|PROMO BRUSHED NICKEL|    14|           4|
+|Brand#51|ECONOMY BRUSHED B...|    49|           4|
+|Brand#24|MEDIUM BRUSHED STEEL|    45|           4|
+|Brand#32|LARGE ANODIZED BRASS|    36|           4|
+|Brand#54|LARGE BURNISHED B...|    49|           4|
+|Brand#23|STANDARD ANODIZED...|    19|           4|
+|Brand#21| PROMO BURNISHED TIN|    19|           4|
+|Brand#24|MEDIUM BRUSHED NI...|     9|           4|
+|Brand#35|PROMO ANODIZED NI...|    19|           4|
+|Brand#25|SMALL BRUSHED COPPER|    45|           4|
+|Brand#13|ECONOMY ANODIZED ...|    19|           4|
+|Brand#11|PROMO ANODIZED STEEL|    23|           4|
+|Brand#53|SMALL BRUSHED COPPER|    14|           8|
+|Brand#23|STANDARD BURNISHE...|    49|           8|
++--------+--------------------+------+------------+
+only showing top 20 rows
+
+{
+  "id" : "eac4cc24-84fb-4a8b-8f43-9cbeb0dafc5b",
+  "runId" : "17bf63a4-d8bc-4314-b9c4-e073d4acc8b9",
+  "name" : "Q16_16",
+  "timestamp" : "2020-07-05T22:49:33.355Z",
+  "batchId" : 0,
+  "numInputRows" : 13008,
+  "ProcessTime" : 233.0,
+  "processedRowsPerSecond" : 55.828326180257505,
+  "totalProcessTime" : 233.0,
+  "sink" : {
+    "description" : "org.apache.spark.sql.execution.streaming.ConsoleSinkProvider@34ff53c0"
+  }
+}
+SlothHashAggregate [numOfRows: 2,850]
+	SlothSymmetricHashJoin [numOfRows: 11,999]
+		DataSourceV2Scan [numOfRows: 12,008]
+		SlothFilter [numOfRows: 1]
+			SlothFilter [numOfRows: 1]
+				DataSourceV2Scan [numOfRows: 1,000]
+Sort Time 7 ms, 8039 keys
+Sort Time 3 ms, 8281 keys
+execute RDD 1258 ms
+-------------------------------------------
+Batch: 0
+-------------------------------------------
++---------+------------------+--------------+---------+--------------+--------------------+---------------+--------------------+
+|s_acctbal|            s_name|        n_name|p_partkey|        p_mfgr|           s_address|        s_phone|           s_comment|
++---------+------------------+--------------+---------+--------------+--------------------+---------------+--------------------+
+|  9508.37|Supplier#000000070|        FRANCE|     3563|Manufacturer#1|INWNH2w,OOWgNDq0B...|16-821-608-1166|ests sleep quickl...|
+|   7205.2|Supplier#000000477|       GERMANY|    10956|Manufacturer#5|VtaNKN5Mqui5yh7j2...|17-180-144-7991| excuses wake exp...|
+|  3526.53|Supplier#000000553|        FRANCE|    17018|Manufacturer#3|         a,liVofXbCJ|16-599-552-3755|lar dinos nag sly...|
+|    91.39|Supplier#000000949|UNITED KINGDOM|     9430|Manufacturer#2|a,UE,6nRVl2fCphkO...|33-332-697-2768|pinto beans. care...|
+|  5364.99|Supplier#000000785|        RUSSIA|    13784|Manufacturer#4|W VkHBpQyD3qjQjWG...|32-297-653-2203| packages boost c...|
+|  3526.53|Supplier#000000553|        FRANCE|     8036|Manufacturer#4|         a,liVofXbCJ|16-599-552-3755|lar dinos nag sly...|
+|  2972.26|Supplier#000000016|        RUSSIA|     1015|Manufacturer#4|YjP5C55zHDXL7LalK...|32-822-502-4215|ously express ide...|
+|   765.69|Supplier#000000799|        RUSSIA|    11276|Manufacturer#2|       jwFN7ZB3T9sMF|32-579-339-1495|nusual requests. ...|
+|  6820.35|Supplier#000000007|UNITED KINGDOM|    13217|Manufacturer#5|s,4TicNGB4uO6PaSq...|33-990-965-2201|s unwind silently...|
+|  9828.21|Supplier#000000647|UNITED KINGDOM|    13120|Manufacturer#5|        x5U7MBZmwfG9|33-258-202-4782|s the slyly even ...|
+|  3294.68|Supplier#000000350|       GERMANY|     4841|Manufacturer#4|      KIFxV73eovmwhh|17-113-181-4017|e slyly special f...|
+|  8096.98|Supplier#000000574|        RUSSIA|      323|Manufacturer#4|2O8 sy9g2mlBOuEjz...|32-866-246-8752|ully after the re...|
+|   9192.1|Supplier#000000115|UNITED KINGDOM|    13325|Manufacturer#1|nJ 2t0f7Ve,wL1,6W...|33-597-248-1220|es across the car...|
+|  5069.27|Supplier#000000328|       GERMANY|    16327|Manufacturer#1|         SMm24d WG62|17-231-513-5721|he unusual ideas....|
+|  9453.01|Supplier#000000802|       ROMANIA|    13275|Manufacturer#4|,6HYXb4uaHITmtMBj...|29-342-882-6463|gular frets. perm...|
+|  4941.88|Supplier#000000321|       ROMANIA|     7320|Manufacturer#5|     pLngFl5yeMcHyov|29-573-279-1406|y final requests ...|
+|  4672.25|Supplier#000000239|        RUSSIA|    12238|Manufacturer#1|XO101kgHrJagK2FL1...|32-396-654-6826|arls wake furious...|
+|  6173.87|Supplier#000000408|        RUSSIA|    18139|Manufacturer#1|qcor1u,vJXAokjnL5...|32-858-724-2950|blithely pending ...|
+|  4518.31|Supplier#000000149|        FRANCE|    18344|Manufacturer#5|pVyWsjOidpHKp4NfK...|16-660-553-2456|ts detect along t...|
+|  4586.49|Supplier#000000680|        RUSSIA|     5679|Manufacturer#3|UhvDfdEfJh,Qbe7VZ...|32-522-382-1620| the regularly re...|
++---------+------------------+--------------+---------+--------------+--------------------+---------------+--------------------+
+only showing top 20 rows
+
+{
+  "id" : "b7f697d7-063b-46be-b064-b6af00392e4d",
+  "runId" : "7c3de260-0fdb-4f38-b419-edb44d1dfc0d",
+  "name" : "Q2_2",
+  "timestamp" : "2020-07-05T22:49:34.257Z",
+  "batchId" : 0,
+  "numInputRows" : 80700,
+  "ProcessTime" : 1083.0,
+  "processedRowsPerSecond" : 74.51523545706371,
+  "totalProcessTime" : 1083.0,
+  "sink" : {
+    "description" : "org.apache.spark.sql.execution.streaming.ConsoleSinkProvider@5c9d215c"
+  }
+}
+SlothSymmetricHashJoin [numOfRows: 44]
+	SlothSymmetricHashJoin [numOfRows: 63]
+		SlothFilter [numOfRows: 204]
+			DataSourceV2Scan [numOfRows: 204]
+		SlothFilter [numOfRows: 292]
+			SlothFilter [numOfRows: 292]
+				DataSourceV2Scan [numOfRows: 292]
+	SlothFilter [numOfRows: 11,985]
+		SlothHashAggregate [numOfRows: 11,985]
+			SlothSymmetricHashJoin [numOfRows: 16,320]
+				SlothFilter [numOfRows: 204]
+					DataSourceV2Scan [numOfRows: 204]
+				SlothFilter [numOfRows: 80,000]
+					SlothFilter [numOfRows: 80,000]
+						DataSourceV2Scan [numOfRows: 80,000]
+execute RDD 3981 ms
+{
+  "id" : "199d7451-d8f4-4337-8518-19a3366cdf0f",
+  "runId" : "14cf03ba-a69a-46ef-aed2-671ef07743ae",
+  "name" : "Q32_9_8",
+  "timestamp" : "2020-07-05T22:49:36.517Z",
+  "batchId" : 0,
+  "numInputRows" : 601787,
+  "ProcessTime" : 3886.0,
+  "processedRowsPerSecond" : 154.86026762738035,
+  "totalProcessTime" : 3886.0,
+  "sink" : {
+    "description" : "org.apache.spark.sql.kafka010.KafkaSourceProvider@38eb4fb1"
+  }
+}
+SlothSymmetricHashJoin [numOfRows: 33,508]
+	SlothFilter [numOfRows: 600,572]
+		DataSourceV2Scan [numOfRows: 600,572]
+	SlothFilter [numOfRows: 1,215]
+		DataSourceV2Scan [numOfRows: 1,215]
+execute RDD 332 ms
+-------------------------------------------
+Batch: 0
+-------------------------------------------
++----------+--------------------+
+|ps_partkey|               value|
++----------+--------------------+
+|     12633|       1.289256161E7|
+|     12231|       1.084113139E7|
+|      2084|       1.150287536E7|
+|      9871|       1.088925368E7|
+|      6366|       1.075978681E7|
+|     12552|       1.333246918E7|
+|     17052|1.4351644200000001E7|
+|     12969|       1.012577793E7|
+|       403|       1.285621734E7|
+|     12146|       1.025736266E7|
+|      5797|       1.303862272E7|
+|      5134|       1.570933852E7|
+|     17852|       1.093471193E7|
+|      3452|       1.407087014E7|
+|     12098|       1.622768121E7|
+|      1833|1.2024581719999999E7|
+|      1084|       1.317042829E7|
+|     17349|       1.135421305E7|
+|      5043|       1.022639588E7|
+|     13334|       1.502366241E7|
++----------+--------------------+
+only showing top 20 rows
+
+{
+  "id" : "6074fda9-6a8e-4b1f-bd67-3b85eed82704",
+  "runId" : "5a3460e5-5649-4a50-ad9d-054f8c974592",
+  "name" : "Q11_11",
+  "timestamp" : "2020-07-05T22:49:40.912Z",
+  "batchId" : 0,
+  "numInputRows" : 8000,
+  "ProcessTime" : 207.0,
+  "processedRowsPerSecond" : 38.64734299516908,
+  "totalProcessTime" : 207.0,
+  "sink" : {
+    "description" : "org.apache.spark.sql.execution.streaming.ConsoleSinkProvider@5e2c03c2"
+  }
+}
+SlothThetaJoin [numOfRows: 22]
+	SlothFilter [numOfRows: 3,716]
+		SlothHashAggregate [numOfRows: 3,716]
+			DataSourceV2Scan [numOfRows: 4,000]
+	SlothFilter [numOfRows: 1]
+		SlothHashAggregate [numOfRows: 1]
+			DataSourceV2Scan [numOfRows: 4,000]
+execute RDD 14520 ms
+{
+  "id" : "3e882135-60a8-4380-a64d-7e8d363f2431",
+  "runId" : "40800456-817b-4966-85c4-a4d79426c03a",
+  "name" : "Q29_5_18_10",
+  "timestamp" : "2020-07-05T22:49:42.037Z",
+  "batchId" : 0,
+  "numInputRows" : 615572,
+  "ProcessTime" : 14425.0,
+  "processedRowsPerSecond" : 42.67396880415945,
+  "totalProcessTime" : 14425.0,
+  "sink" : {
+    "description" : "org.apache.spark.sql.kafka010.KafkaSourceProvider@20a95ad0"
+  }
+}
+SlothSymmetricHashJoin [numOfRows: 600,572]
+	SlothFilter [numOfRows: 600,572]
+		DataSourceV2Scan [numOfRows: 600,572]
+	SlothFilter [numOfRows: 15,000]
+		DataSourceV2Scan [numOfRows: 15,000]
+execute RDD 11037 ms
+-------------------------------------------
+Batch: 0
+-------------------------------------------
++--------------+------+------------------+
+|        nation|o_year|        sum_profit|
++--------------+------+------------------+
+|        FRANCE|  1993|      4086437.3102|
+|          IRAN|  1995| 4420783.420500002|
+|        FRANCE|  1996|3622479.2412999994|
+|         INDIA|  1997| 5159562.703300002|
+|         KENYA|  1994|3983095.3994000005|
+|          PERU|  1997|4064142.4091000003|
+|         INDIA|  1994| 5164001.958200001|
+|         KENYA|  1992|3304641.8340000007|
+|         KENYA|  1997|2929194.2316999994|
+|      ETHIOPIA|  1998|1953927.2681999998|
+|       ROMANIA|  1998|1992773.6810999995|
+|         EGYPT|  1992|      3373762.3335|
+|UNITED KINGDOM|  1996|4189476.3065000004|
+|        CANADA|  1998|2194509.0464999992|
+|       MOROCCO|  1995|3515127.1401999993|
+|         JAPAN|  1995|      4793005.8027|
+|    MOZAMBIQUE|  1998|      1620428.7346|
+| UNITED STATES|  1997|      4135581.5734|
+|     INDONESIA|  1995| 5266783.489899996|
+|       ROMANIA|  1992|3029274.4419999993|
++--------------+------+------------------+
+only showing top 20 rows
+
+{
+  "id" : "fa924d55-1a74-4af8-bef2-b942df524b25",
+  "runId" : "586f13ee-e53b-401f-91a9-26517f415b7b",
+  "name" : "Q9_9",
+  "timestamp" : "2020-07-05T22:49:56.987Z",
+  "batchId" : 0,
+  "numInputRows" : 113185,
+  "ProcessTime" : 10872.0,
+  "processedRowsPerSecond" : 10.410688005886684,
+  "totalProcessTime" : 10872.0,
+  "sink" : {
+    "description" : "org.apache.spark.sql.execution.streaming.ConsoleSinkProvider@1dc32f33"
+  }
+}
+SlothHashAggregate [numOfRows: 175]
+	SlothSymmetricHashJoin [numOfRows: 32,160]
+		SlothSymmetricHashJoin [numOfRows: 32,160]
+			SlothSymmetricHashJoin [numOfRows: 32,160]
+				SlothFilter [numOfRows: 32,160]
+					DataSourceV2Scan [numOfRows: 32,160]
+				SlothFilter [numOfRows: 80,000]
+					DataSourceV2Scan [numOfRows: 80,000]
+			SlothFilter [numOfRows: 1,000]
+				SlothFilter [numOfRows: 1,000]
+					DataSourceV2Scan [numOfRows: 1,000]
+		SlothFilter [numOfRows: 25]
+			DataSourceV2Scan [numOfRows: 25]
+execute RDD 3280 ms
+-------------------------------------------
+Batch: 0
+-------------------------------------------
++---------+-----------------+
+|   n_name|          revenue|
++---------+-----------------+
+|    CHINA|7822102.999999999|
+|    JAPAN|6000077.218400002|
+|    INDIA|6376121.508500002|
+|  VIETNAM|4497840.546599998|
+|INDONESIA|5580475.402700002|
++---------+-----------------+
+
+{
+  "id" : "f1a3cc45-f2aa-4ae7-8631-72002df2156f",
+  "runId" : "de9f16e1-f583-45e7-b07d-07a5e17410b6",
+  "name" : "Q5_5",
+  "timestamp" : "2020-07-05T22:50:14.265Z",
+  "batchId" : 0,
+  "numInputRows" : 92754,
+  "ProcessTime" : 3170.0,
+  "processedRowsPerSecond" : 29.25993690851735,
+  "totalProcessTime" : 3170.0,
+  "sink" : {
+    "description" : "org.apache.spark.sql.execution.streaming.ConsoleSinkProvider@5c72c4bb"
+  }
+}
+SlothHashAggregate [numOfRows: 5]
+	SlothSymmetricHashJoin [numOfRows: 865]
+		SlothFilter [numOfRows: 225]
+			DataSourceV2Scan [numOfRows: 225]
+		SlothFilter [numOfRows: 92,529]
+			DataSourceV2Scan [numOfRows: 92,529]
+execute RDD 8792 ms
+-------------------------------------------
+Batch: 0
+-------------------------------------------
++------------------+---------+----------+-----------+------------+------------+
+|            c_name|c_custkey|o_orderkey|o_orderdate|o_totalprice|sum_quantity|
++------------------+---------+----------+-----------+------------+------------+
+|Customer#000001639|     1639|    502886| 1994-04-12|   456423.88|       312.0|
+|Customer#000006655|     6655|     29158| 1995-10-21|   452805.02|       305.0|
+|Customer#000001775|     1775|      6882| 1997-04-09|    408368.1|       303.0|
+|Customer#000014110|    14110|    565574| 1995-09-24|   425099.85|       301.0|
+|Customer#000011459|    11459|    551136| 1993-05-19|   386812.74|       308.0|
++------------------+---------+----------+-----------+------------+------------+
+
+{
+  "id" : "115c0afd-00a2-44b6-b4b8-ca229c264a5e",
+  "runId" : "78efe52d-f6d1-4901-b292-977a96c37068",
+  "name" : "Q18_18",
+  "timestamp" : "2020-07-05T22:50:27.277Z",
+  "batchId" : 0,
+  "numInputRows" : 1201144,
+  "ProcessTime" : 8662.0,
+  "processedRowsPerSecond" : 138.6682059570538,
+  "totalProcessTime" : 8662.0,
+  "sink" : {
+    "description" : "org.apache.spark.sql.execution.streaming.ConsoleSinkProvider@291acd23"
+  }
+}
+SlothHashAggregate [numOfRows: 5]
+	SlothSymmetricHashJoin [numOfRows: 35]
+		SlothFilter [numOfRows: 600,572]
+			DataSourceV2Scan [numOfRows: 600,572]
+		SlothFilter [numOfRows: 5]
+			SlothFilter [numOfRows: 5]
+				SlothHashAggregate [numOfRows: 150,000]
+					DataSourceV2Scan [numOfRows: 600,572]
+execute RDD 1217 ms
+-------------------------------------------
+Batch: 0
+-------------------------------------------
++---------+------------------+---------+---------------+--------------+--------------------+--------------------+------------------+
+|c_custkey|            c_name|c_acctbal|        c_phone|        n_name|           c_address|           c_comment|           revenue|
++---------+------------------+---------+---------------+--------------+--------------------+--------------------+------------------+
+|     3562|Customer#000003562|  4229.42|14-495-861-4689|         EGYPT|e83zXtdzaoYDw VKs...|ending excuses ac...| 85373.51819999999|
+|    11012|Customer#000011012|  3822.18|15-970-916-6431|      ETHIOPIA|PBtk4YzSFpfm, 8sb...|against the blith...|        58898.0638|
+|     1867|Customer#000001867|  6470.11|11-951-119-6203|     ARGENTINA|72gC1ZTlzFNQy9CvF...|final instruction...|150396.23239999998|
+|      953|Customer#000000953|  6292.06|32-829-961-2870|        RUSSIA|5HJQ8UzSSl1PJv28M...| according to the...|        98165.3888|
+|     9398|Customer#000009398|  5240.86|34-140-238-4519| UNITED STATES|woGiy ZIZmv85sLGx...|posits. furiously...| 65273.05439999999|
+|     4193|Customer#000004193|  -136.02|23-925-546-3500|        JORDAN| J13fxbEVzcackYPf...|nstructions sleep...|        60805.7088|
+|    14363|Customer#000014363|  3682.91|13-698-152-1081|        CANADA|5VosUjBUgezxR5TPq...|ounts. even accou...|        37780.1604|
+|      868|Customer#000000868|  7616.48|32-850-421-3334|        RUSSIA|cFG8Fa5h1e uvHJ9p...|the requests. reg...|106947.63989999998|
+|      965|Customer#000000965|   4768.8|12-893-735-6415|        BRAZIL|UigBc,9d1iLtQAVat...|lly enticing pint...|        179566.573|
+|    12245|Customer#000012245|  8875.09|12-102-287-9684|        BRAZIL| e 0mvRDEJjzWBTr3...|ng to the blithel...|        27585.9438|
+|     2611|Customer#000002611|  2971.37|27-481-882-2683|          PERU|aAMf, zkA7Ub3Up n...| special deposits...|        70910.1316|
+|     1879|Customer#000001879|  5163.22|27-652-714-8086|          PERU|DsH91sbfSoNl3Ohor...|theodolites could...|        62481.4044|
+|     6289|Customer#000006289|  1509.92|27-437-457-4918|          PERU|MuOF83xgQwBnj42OU...|efully furiously ...|          69492.33|
+|     2869|Customer#000002869|    84.25|25-348-890-8313|       MOROCCO|,gSuQPVc3XBADQHzO...|osits haggle slyl...|       157929.4289|
+|     3499|Customer#000003499|  4680.63|32-510-441-7527|        RUSSIA|UEbH2FRxDwXbliOvv...|ross the slyly bo...|        40545.7056|
+|     8740|Customer#000008740|  2023.72|13-564-495-2767|        CANADA|J1ElrQb19gPA5mLhn...|tructions impress...|         17234.538|
+|     7474|Customer#000007474|  5749.34|17-485-629-5639|       GERMANY|QsJzanMgWGyyfMncX...|ly ironic excuses...|       145859.4355|
+|     7921|Customer#000007921|  2432.45|30-120-298-7884|  SAUDI ARABIA|p8fJtCjx7p0nzW5T9...|lyly unusual, eve...|       241847.0284|
+|     9358|Customer#000009358|   792.93|33-960-853-4948|UNITED KINGDOM|          S1DlQFX,22|ccounts. carefull...|       117862.4124|
+|     5827|Customer#000005827|  1350.53|30-452-938-9796|  SAUDI ARABIA|5l69PKW8t12LVkbSI...|lar packages dete...|        64934.0052|
++---------+------------------+---------+---------------+--------------+--------------------+--------------------+------------------+
+only showing top 20 rows
+
+{
+  "id" : "451b8f9a-e3ed-4054-9fd0-31dd1d155c05",
+  "runId" : "b9919468-35d3-4a3a-a466-3cb22e18053a",
+  "name" : "Q10_10",
+  "timestamp" : "2020-07-05T22:50:36.897Z",
+  "batchId" : 0,
+  "numInputRows" : 11590,
+  "ProcessTime" : 1107.0,
+  "processedRowsPerSecond" : 10.469738030713641,
+  "totalProcessTime" : 1107.0,
+  "sink" : {
+    "description" : "org.apache.spark.sql.execution.streaming.ConsoleSinkProvider@4a1f7a4a"
+  }
+}
+SlothHashAggregate [numOfRows: 3,803]
+	SlothSymmetricHashJoin [numOfRows: 11,565]
+		SlothFilter [numOfRows: 11,565]
+			DataSourceV2Scan [numOfRows: 11,565]
+		SlothFilter [numOfRows: 25]
+			DataSourceV2Scan [numOfRows: 25]
+execute RDD 742 ms
+-------------------------------------------
+Batch: 0
+-------------------------------------------
++------+--------------------+
+|o_year|           mkt_share|
++------+--------------------+
+|  1996|0.018250279107962144|
+|  1995|0.028648741305617557|
++------+--------------------+
+
+{
+  "id" : "155d2842-929b-4fa0-b98d-73895fee1460",
+  "runId" : "1ac5faba-1467-49a8-bb52-3fee65089a96",
+  "name" : "Q8_8",
+  "timestamp" : "2020-07-05T22:50:38.879Z",
+  "batchId" : 0,
+  "numInputRows" : 17484,
+  "ProcessTime" : 507.0,
+  "processedRowsPerSecond" : 34.48520710059171,
+  "totalProcessTime" : 507.0,
+  "sink" : {
+    "description" : "org.apache.spark.sql.execution.streaming.ConsoleSinkProvider@2bb57613"
+  }
+}
+SlothHashAggregate [numOfRows: 2]
+	SlothSymmetricHashJoin [numOfRows: 282]
+		SlothSymmetricHashJoin [numOfRows: 282]
+			SlothSymmetricHashJoin [numOfRows: 1,429]
+				SlothSymmetricHashJoin [numOfRows: 1,429]
+					SlothSymmetricHashJoin [numOfRows: 1,429]
+						SlothFilter [numOfRows: 1,429]
+							SlothFilter [numOfRows: 1,429]
+								DataSourceV2Scan [numOfRows: 1,429]
+						SlothFilter [numOfRows: 1,000]
+							SlothFilter [numOfRows: 1,000]
+								DataSourceV2Scan [numOfRows: 1,000]
+					SlothFilter [numOfRows: 15,000]
+						SlothFilter [numOfRows: 15,000]
+							DataSourceV2Scan [numOfRows: 15,000]
+				SlothFilter [numOfRows: 25]
+					SlothFilter [numOfRows: 25]
+						DataSourceV2Scan [numOfRows: 25]
+			SlothFilter [numOfRows: 1]
+				SlothFilter [numOfRows: 1]
+					DataSourceV2Scan [numOfRows: 5]
+		SlothFilter [numOfRows: 25]
+			DataSourceV2Scan [numOfRows: 25]
+
+

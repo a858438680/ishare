@@ -11,7 +11,7 @@ l_commitdate < l_receiptdate			        :0.63
 l_shipdate < l_commitdate			            :0.49
 l_receiptdate > l_commitdate			        :0.63
 l_returnflag === "R"				            :0.25
-l_quantity < 24					                :0.46
+l_quantity < 24.0					            :0.46
 l_shipmode === "MAIL"				            :0.14
 l_shipmode isin ("AIR", "AIR REG")		        :0.15
 l_shipinstruct === "DELIVER IN PERSON"		    :0.25
@@ -37,7 +37,7 @@ o_orderdate between ("1993-07-01", "1993-10-01")	:0.038
 
 c_mktsegment === "BUILDING"							:0.2
 substring($"c_phone", 1, 2) isin ("13", "31", "23", "29", "30", "18", "17")	:0.28
-c_acctbal > 0.00								:0.9
+c_acctbal > 0.0								:0.9
 
 n_name === "GERMANY"			:0.04
 n_name === "SAUDI ARABIA"		:0.04

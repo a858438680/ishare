@@ -111,9 +111,9 @@ case class SlothThetaJoinExec (
   private val enableIOLAP =
     sqlContext.sparkSession.conf.get(SQLConf.SLOTHDB_IOLAP).getOrElse(false)
   private val query_name =
-    sqlContext.sparkSession.conf.get(SQLConf.SLOTHDB_QUERYNAME).get
+    sqlContext.sparkSession.conf.get(SQLConf.SLOTHDB_QUERYNAME).getOrElse("Nothing")
   private val statRoot =
-    sqlContext.sparkSession.conf.get(SQLConf.SLOTHDB_STAT_DIR).get
+    sqlContext.sparkSession.conf.get(SQLConf.SLOTHDB_STAT_DIR).getOrElse("Nothing")
 
   override def requiredChildDistribution: Seq[Distribution] = {
     UnspecifiedDistribution :: new SlothBroadcastDistribution() :: Nil

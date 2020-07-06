@@ -42,6 +42,45 @@ object QueryGenerator {
     subQueries.foreach(subQuery => {
       println(generateQueryStr(subQuery) + "\n")
     })
+
+    val queryConfig = generateQueryConfig(subQueries)
+    printQueryConfig(queryConfig)
+  }
+
+  private def printQueryConfig(queryConfig: QueryConfig): Unit = {
+    println("Query Config\n")
+    queryConfig.subQueryInfo.zipWithIndex.filter(pair => {
+      val info = pair._1
+      info.predInfoMap.nonEmpty
+    }).foreach(pair => {
+      val info = pair._1
+      val idx = pair._2
+      val predMapStr = predMapToString(info.predInfoMap)
+      println(s"${queryConfig.queryNames(idx)}\n$predMapStr")
+    })
+  }
+
+  def predMapToString(predMap: mutable.HashMap[Int, mutable.HashSet[PredInfo]]): String = {
+    val strBuf = new StringBuffer()
+    predMap.foreach(pair => {
+      val qid = pair._1
+      val predSetStr = predSetToString(pair._2)
+      strBuf.append(s"$qid -> $predSetStr\n")
+    })
+    strBuf.toString
+  }
+
+  def predSetToString(predSet: mutable.HashSet[PredInfo]): String = {
+    val strBuf = new StringBuffer()
+    strBuf.append("[")
+    predSet.iterator.zipWithIndex.foreach(pair => {
+      val value = pair._1
+      val idx = pair._2
+      strBuf.append(s"${value.toString}")
+      if (idx != (predSet.size - 1)) strBuf.append(", ")
+    })
+    strBuf.append("]")
+    strBuf.toString
   }
 
   def generateQueryAndConfiguration(multiQuery: Array[PlanOperator]):
@@ -437,6 +476,8 @@ object QueryGenerator {
   }
 
   private def generateQueryConfig(subQueries: Array[PlanOperator]): QueryConfig = {
+    // val numBatches = Array(2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+    //   2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2)
     val numBatches = Array(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
       1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
     val constraints = Array.fill[String](35)("1.0")
@@ -510,7 +551,7 @@ object QueryGenerator {
     val right = predicate.right
 
     if (op.compareTo("between") == 0) {
-      val rightArray = stripParenthesis(right).split(",").map(stripQuote(_).trim)
+      val rightArray = stripParenthesis(right).split(",").map(_.trim).map(stripQuote)
       Array(
         PredInfo(left, ">=", rightArray(0)),
         PredInfo(left, "<=", rightArray(1)))
@@ -520,11 +561,11 @@ object QueryGenerator {
       else if (mode == 1) Array(PredInfo(left, "StartsWith", newRight))
       else Array(PredInfo(left, "EndsWith", newRight))
     } else if (op.compareTo("===") == 0) {
-      Array(PredInfo(left, "=", right))
+      Array(PredInfo(left, "=", stripQuote(right.trim)))
     } else if (op.compareTo("=!=") == 0) {
-      Array(PredInfo(left, "!=", right))
+      Array(PredInfo(left, "!=", stripQuote(right.trim)))
     } else if (op.compareTo("isin") != 0) {
-      Array(PredInfo(left, op, right))
+      Array(PredInfo(left, op, stripQuote(right.trim)))
     } else {
       Array.empty[PredInfo]
     }

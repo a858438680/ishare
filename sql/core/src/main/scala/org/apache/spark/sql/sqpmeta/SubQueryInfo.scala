@@ -38,13 +38,35 @@ case class SubQueryInfo (qidArray: Array[Int],
     predInfoMap.foreach(pair => {
       val qid = pair._1
       val candSet = pair._2
-      if (candSet.diff(predInfoSet).isEmpty && predInfoSet.diff(candSet).isEmpty) {
+      if (sameSet(candSet, predInfoSet)) {
         qidBuf.append(qid)
       }
     })
 
     qidBuf.toArray
   }
+
+  private def sameSet(candidateSet: mutable.HashSet[PredInfo],
+                      predInfoSet: mutable.HashSet[PredInfo]): Boolean = {
+    var prefix = ""
+    var isValidSet = true
+    predInfoSet.foreach(pred => {
+      val idx = pred.left.indexOf("_")
+      if (idx == -1) isValidSet = false
+      else prefix = pred.left.substring(0, idx + 1)
+    })
+
+    if (!isValidSet) return false // Not valid input set
+
+    val newCandSet = mutable.HashSet.empty[PredInfo]
+    candidateSet.foreach(pred => {
+      if (pred.left.startsWith(prefix)) newCandSet.add(pred)
+    })
+
+    if (newCandSet.diff(predInfoSet).isEmpty && predInfoSet.diff(newCandSet).isEmpty) true
+    else false
+  }
+
 }
 
 case class PredInfo (left: String, op: String, right: String) {
@@ -120,7 +142,7 @@ object SubQueryInfo {
 
   private def parseOnePredInfo(conditionStr: String): PredInfo = {
 
-    if (conditionStr.contains(" IN ")) return null // Do not evaluate isin predicate
+    if (conditionStr.contains(" IN (")) return null // Do not evaluate isin predicate
 
     val not = conditionStr.startsWith("NOT")
     val mode =
@@ -138,20 +160,30 @@ object SubQueryInfo {
       val predStr = conditionStr.substring(dotIdx + 2, conditionStr.length - 1)
       if (mode == -1) {
         val predStrArray = predStr.split("\\s+")
-        if (predStrArray.length == 3) {
+        if (predStr.contains("as string")) { // this is the case for date comparison
+          if (predStrArray.length == 5) {
+            val left = predStrArray(0)
+            val right = predStrArray(4)
+            val op =
+              if (predStrArray(3).compareTo("=") == 0 && not) "!="
+              else predStrArray(3)
+
+            PredInfo(left, op, right)
+          } else {
+            null
+          }
+        } else if (predStrArray.length >= 3) {
           val left = predStrArray(0)
-          val right = predStrArray(2)
           val op =
             if (predStrArray(1).compareTo("=") == 0 && not) "!="
             else predStrArray(1)
 
-          PredInfo(left, op, right)
-        } else if (predStrArray.length == 5) { // this is the case for date comparison
-          val left = predStrArray(0)
-          val right = predStrArray(4)
-          val op =
-            if (predStrArray(3).compareTo("=") == 0 && not) "!="
-            else predStrArray(3)
+          val rightBuf = new StringBuffer()
+          for (idx <- 2 until predStrArray.length) {
+            rightBuf.append(predStrArray(idx))
+            if (idx < predStrArray.length - 1) rightBuf.append(" ")
+          }
+          val right = rightBuf.toString
 
           PredInfo(left, op, right)
         } else {

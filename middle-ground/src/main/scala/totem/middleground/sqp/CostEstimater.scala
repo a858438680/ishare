@@ -24,7 +24,7 @@ import scala.collection.mutable
 object CostEstimater {
 
   val READCOST = 1
-  val WRITECOST = 2
+  val WRITECOST = 3
   val ROOTQID = -1
   val STDRATIO = 1.0
 
@@ -197,7 +197,7 @@ object CostEstimater {
 
     var totalCost = 0.0
     if (op.parentOps.length > 1) {
-      totalCost += WRITECOST * outCard
+      totalCost += WRITECOST * outCard + READCOST
       totalCost += READCOST * outCard * op.parentOps.length
     } else {
       totalCost += READCOST * outCard * STDRATIO
