@@ -21,7 +21,7 @@ def execQ15_subquery(spark: SparkSession): DataFrame = {
   val sum_disc_price = new Sum_disc_price
 
   val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
-    .filter($"l_shipdate" between ("1996-01-01", "1996-04-01"))
+    .filter($"l_shipdate" between ("1995-01-01", "1995-04-01"))
 
   return l
     .groupBy($"l_suppkey")

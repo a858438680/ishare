@@ -64,7 +64,8 @@ abstract class Optimizer(sessionCatalog: SessionCatalog)
         PushDownPredicate,
         LimitPushDown,
         ColumnPruning,
-        InferFiltersFromConstraints,
+        // Totem-SQP: We need to remove this rule to make sure shared execution work
+        // InferFiltersFromConstraints,
         // Operator combine
         CollapseRepartition,
         CollapseProject,
@@ -85,7 +86,7 @@ abstract class Optimizer(sessionCatalog: SessionCatalog)
         SimplifyConditionals,
         RemoveDispensableExpressions,
         SimplifyBinaryComparison,
-        PruneFilters,
+        // PruneFilters,
         EliminateSorts,
         SimplifyCasts,
         SimplifyCaseConversionExpressions,

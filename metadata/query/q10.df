@@ -4,9 +4,9 @@ def execQ10(spark: SparkSession): Unit = {
 
   val c = DataUtils.loadStreamTable(spark, "customer", "c", tpchSchema)
   val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
-    .filter($"o_orderdate" between ("1993-10-01", "1994-01-01"))
+    .filter($"o_orderdate" between ("1994-05-01", "1994-10-01"))
   val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
-    .filter($"l_returnflag" === "R")
+    .filter(($"l_returnflag" === "R") and ($"l_shipdate" between ("1994-02-01", "1994-10-01")))
   val n = DataUtils.loadStreamTable(spark, "nation", "n", tpchSchema)
 
   return l

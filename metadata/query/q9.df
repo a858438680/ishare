@@ -11,8 +11,8 @@ def execQ9(spark: SparkSession): Unit = {
   val n = DataUtils.loadStreamTable(spark, "nation", "n", tpchSchema)
 
   return l
-    .join(o, $"l_orderkey" === $"o_orderkey")
     .join(p, $"l_partkey" === $"p_partkey")
+    .join(o, $"l_orderkey" === $"o_orderkey")
     .join(ps, $"l_partkey" === $"ps_partkey" and $"l_suppkey" === $"ps_suppkey")
     .join(s, $"l_suppkey" === $"s_suppkey")
     .join(n, $"s_nationkey" === $"n_nationkey")

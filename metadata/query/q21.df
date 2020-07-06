@@ -4,17 +4,17 @@ def execQ21(spark: SparkSession): Unit = {
 
   val s = DataUtils.loadStreamTable(spark, "supplier", "s", tpchSchema)
   val l1 = DataUtils.loadStreamTable(spark, "lineitem", "l1", tpchSchema)
-    .filter($"l_receiptdate" > $"l_commitdate")
+    .filter(($"l_receiptdate" > $"l_commitdate") and ($"l_shipdate" between ("1994-07-01", "1994-10-01")))
   val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
     .filter($"o_orderstatus" === "F")
   val n = DataUtils.loadStreamTable(spark, "nation", "n", tpchSchema)
     .filter($"n_name" === "SAUDI ARABIA")
 
   val l2Raw = DataUtils.loadStreamTable(spark, "lineitem", "l2", tpchSchema)
-    .filter($"l_receiptdate" > $"l_commitdate")
+    .filter(($"l_receiptdate" > $"l_commitdate") and ($"l_shipdate" between ("1994-07-01", "1994-10-01")))
 
   val l3Raw = DataUtils.loadStreamTable(spark, "lineitem", "l3", tpchSchema)
-    .filter($"l_receiptdate" > $"l_commitdate")
+    .filter(($"l_receiptdate" > $"l_commitdate") and ($"l_shipdate" between ("1994-07-01", "1994-10-01")))
 
   val l2 = l2Raw
     .select($"l_orderkey".as("l2_orderkey"), $"l_suppkey".as("l2_suppkey"))

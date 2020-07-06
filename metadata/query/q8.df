@@ -7,7 +7,7 @@ def execQ8(spark: SparkSession): Unit = {
   val s = DataUtils.loadStreamTable(spark, "supplier", "s", tpchSchema)
   val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
   val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
-    .filter($"o_orderdate" between ("1995-01-01", "1996-12-31"))
+    .filter($"o_orderdate" between ("1994-01-01", "1994-08-31"))
   val c = DataUtils.loadStreamTable(spark, "customer", "c", tpchSchema)
   val n1Raw = DataUtils.loadStreamTable(spark, "nation", "n1", tpchSchema)
   val n2Raw = DataUtils.loadStreamTable(spark, "nation", "n2", tpchSchema)

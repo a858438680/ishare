@@ -3,7 +3,7 @@ def execQ7(spark: SparkSession): Unit = {
   val sum_disc_price = new Sum_disc_price
 
   val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
-    .filter($"l_shipdate" between ("1995-01-01", "1996-12-31"))
+    .filter($"l_shipdate" between ("1995-01-01", "1995-06-31"))
   val s = DataUtils.loadStreamTable(spark, "supplier", "s", tpchSchema)
   val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
   val c = DataUtils.loadStreamTable(spark, "customer", "c", tpchSchema)

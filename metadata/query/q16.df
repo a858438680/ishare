@@ -5,7 +5,7 @@ def execQ16(spark: SparkSession): Unit = {
   val ps = DataUtils.loadStreamTable(spark, "partsupp", "ps", tpchSchema)
 
   val p = DataUtils.loadStreamTable(spark, "part", "part", tpchSchema)
-    .filter(($"p_brand" =!= "Brand#45") and ($"p_size" isin (49, 14, 23, 45, 19, 3, 36, 9)))
+    .filter(($"p_brand" =!= "Brand#45") and ($"p_size" isin (49, 15, 9)))
 
   val rawS = DataUtils.loadStreamTable(spark, "supplier", "s", tpchSchema)
     .filter($"s_comment" like ("%Customer%Complaints%"))

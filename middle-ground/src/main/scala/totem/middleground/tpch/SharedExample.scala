@@ -420,15 +420,25 @@ class CandidateQuery (query_name: String, uid: String, numBatch: String, constra
 
     val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
 
-    val result = l.filter(($"l_quantity" < 10) and ($"l_shipdate" < "1994-01-01") and
-      ($"l_returnflag" isin ("R", "S", "K")) and ($"l_linestatus" === "F"))
+    val result = l.filter(($"l_shipdate" > "1998-03-15")
+      or (($"l_shipdate" between ("1994-01-01", "1995-01-01"))
+      and ($"l_discount" between (0.05, 0.07)) and ($"l_quantity" < 24.0))
+      or ($"l_shipdate" between ("1995-01-01", "1995-06-31"))
+      or (($"l_returnflag" === "R") and ($"l_shipdate" between ("1994-02-01", "1994-10-01")))
+      or (($"l_shipmode" === "MAIL") and ($"l_receiptdate" > $"l_commitdate")
+      and ($"l_shipdate" < $"l_commitdate") and ($"l_receiptdate" === "1994-01-01"))
+      or ($"l_shipdate" between ("1994-09-01", "1994-10-01"))
+      or ($"l_shipdate" between ("1995-01-01", "1995-04-01"))
+      or ($"l_shipdate" between ("1994-01-01", "1994-06-31"))
+      or (($"l_shipinstruct" === "DELIVER IN PERSON") and ($"l_shipmode" isin ("AIR", "AIR REG")))
+      or (($"l_receiptdate" > $"l_commitdate")
+      and ($"l_shipdate" between ("1994-07-01", "1994-10-01")))
+    )
       .groupBy($"l_returnflag", $"l_linestatus")
       .agg(
         sum_qty($"l_quantity").as("sum_qty"),
         count_order(lit(1L)).as("count_order")
       )
-
-    // result.explain(true)
 
     val unique_query_name = query_name + "_" + uid
     DataUtils.writeToSinkWithExtraOptions(

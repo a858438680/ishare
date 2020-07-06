@@ -5,7 +5,7 @@ def execQ12(spark: SparkSession): Unit = {
 
   val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
   val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
-    .filter(($"l_shipmode" === "MAIL") and ($"l_commitdate" < $"l_receiptdate") and ($"l_shipdate" < $"l_commitdate") and ($"l_receiptdate" === "1994-01-01"))
+    .filter(($"l_shipmode" === "MAIL") and ($"l_receiptdate" > $"l_commitdate") and ($"l_shipdate" < $"l_commitdate") and ($"l_receiptdate" === "1994-01-01"))
 
   return l
     .join(o, $"l_orderkey" === $"o_orderkey")

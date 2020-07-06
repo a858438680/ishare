@@ -5,9 +5,9 @@ def execQ3(spark: SparkSession): Unit = {
   val c = DataUtils.loadStreamTable(spark, "customer", "c", tpchSchema)
     .filter($"c_mktsegment" === "BUILDING")
   val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
-    .filter($"o_orderdate" < "1995-03-15")
+    .filter($"o_orderdate" < "1992-03-15")
   val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
-    .filter($"l_shipdate" > "1995-03-15")
+    .filter($"l_shipdate" > "1998-03-15")
 
   return c
     .join(o, $"c_custkey" === $"o_custkey")

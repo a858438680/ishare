@@ -6,6 +6,7 @@ def execQ18(spark: SparkSession): Unit = {
   val c = DataUtils.loadStreamTable(spark, "customer", "c", tpchSchema)
   val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
   val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
+    .filter($"l_shipdate" between ("1994-01-01", "1994-06-31"))
 
   val lb = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
 

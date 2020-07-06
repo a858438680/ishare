@@ -3,7 +3,7 @@ def execQ20(spark: SparkSession): Unit = {
   val doubleSum = new DoubleSum
 
   val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
-    .filter($"l_shipdate" between ("1994-01-01", "1994-12-31"))
+    .filter($"l_shipdate" between ("1994-01-01", "1994-06-31"))
   val p = DataUtils.loadStreamTable(spark, "part", "p", tpchSchema)
     .filter($"p_name" like ("forest%"))
   val ps = DataUtils.loadStreamTable(spark, "partsupp", "ps", tpchSchema)

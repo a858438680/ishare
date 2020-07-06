@@ -4,7 +4,7 @@ def execQ14(spark: SparkSession): Unit = {
   val udaf_q14 = new UDAF_Q14
 
   val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
-    .filter($"l_shipdate" between ("1995-09-01", "1995-10-01"))
+    .filter($"l_shipdate" between ("1994-09-01", "1994-10-01"))
   val p = DataUtils.loadStreamTable(spark, "part", "p", tpchSchema)
 
   return l

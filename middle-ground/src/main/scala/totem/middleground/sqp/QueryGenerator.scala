@@ -520,14 +520,15 @@ object QueryGenerator {
       subQuery match {
         case select: SelectOperator =>
           if (select.getQidSet.length > 1) {
-            val qid = select.selectSet(0)
-            if (!predInfoMap.contains(qid)) {
-              val newPredInfoSet = mutable.HashSet.empty[PredInfo]
-              predInfoMap.put(qid, newPredInfoSet)
-            }
-            val predInfoSet = predInfoMap(qid)
-            select.getPredicates.foreach(pred => {
-              convertPredToInternal(pred).foreach(predInfoSet.add)
+            select.selectSet.foreach(qid => {
+              if (!predInfoMap.contains(qid)) {
+                val newPredInfoSet = mutable.HashSet.empty[PredInfo]
+                predInfoMap.put(qid, newPredInfoSet)
+              }
+              val predInfoSet = predInfoMap(qid)
+              select.getPredicates.foreach(pred => {
+                convertPredToInternal(pred).foreach(predInfoSet.add)
+              })
             })
           }
         case agg: AggOperator =>
