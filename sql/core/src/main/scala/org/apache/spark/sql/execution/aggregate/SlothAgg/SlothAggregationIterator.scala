@@ -312,6 +312,7 @@ extends Iterator[InternalRow] with Logging {
     val unsafeInput = input.asInstanceOf[UnsafeRow]
     val isInsert = unsafeInput.isInsert
     unsafeInput.cleanStates()
+    unsafeInput.clearQidSet()
 
     // Load state into all hashmaps
     if (isNewGroup) {
