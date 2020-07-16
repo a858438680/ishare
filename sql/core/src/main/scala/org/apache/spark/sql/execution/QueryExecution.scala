@@ -71,7 +71,8 @@ class QueryExecution(val sparkSession: SparkSession, val logical: LogicalPlan) {
     sparkSession.sharedState.cacheManager.useCachedData(analyzed)
   }
 
-  lazy val optimizedPlan: LogicalPlan = sparkSession.sessionState.optimizer.execute(withCachedData)
+  lazy val optimizedPlan: LogicalPlan =
+    sparkSession.sessionState.optimizer.execute(withCachedData)
 
   lazy val sparkPlan: SparkPlan = {
     SparkSession.setActiveSession(sparkSession)
@@ -288,11 +289,17 @@ class QueryExecution(val sparkSession: SparkSession, val logical: LogicalPlan) {
   }
 
   private def initialStarupTime = 0
-  private def perExecutionStartupTime = 60
-  private def joinStartupTime = 15
-  private def aggStartupTime = 15
-  private def filterStartupTime = 5
-  private def sourceStartupTime = 5
+  // private def perExecutionStartupTime = 60
+  // private def joinStartupTime = 650
+  // private def aggStartupTime = 300
+  // private def filterStartupTime = 5
+  // private def sourceStartupTime = 5
+
+  private def perExecutionStartupTime = 0
+  private def joinStartupTime = 0
+  private def aggStartupTime = 0
+  private def filterStartupTime = 0
+  private def sourceStartupTime = 0
 
   private def getPerOpStartUpTime(plan: SparkPlan): Long = {
     val childCost = plan.children.map(getPerOpStartUpTime).sum
@@ -403,7 +410,10 @@ class QueryExecution(val sparkSession: SparkSession, val logical: LogicalPlan) {
         source.qidSet = subQueryInfo.extractQidSet()
 
       case agg: SlothHashAggregateExec =>
+        print(s"aggQidCluster ${subQueryInfo.aggQidCluster.length} " +
+          s"${subQueryInfo.aggQidCluster(0)}\n")
         agg.setAggQidCluster(subQueryInfo.aggQidCluster)
+        agg.setAggQidSet(subQueryInfo.extractQidSet())
 
       // We do not share non-inner join
       // and qid is only used for the non-inner join,

@@ -19,23 +19,29 @@
 
 package totem.middleground.sqp.test
 
-import scala.collection.mutable
+import totem.middleground.sqp.Optimizer
+import totem.middleground.sqp.Utils
 
-import totem.middleground.sqp.{Parser, PlanOperator, QueryGraph, Utils}
-
-object TestParser {
-
+object TestPaceOptimizer {
   def main(args: Array[String]): Unit = {
-    if (args.length < 2) {
-      System.err.println("Usage: TestParser [Path to DF file] [Qid]")
+
+    if (args.length < 3) {
+      System.err.println("Usage: TestPaceOptimizer [DF directory] [Config file] [Pred file]")
       System.exit(1)
     }
 
-    val qid = args(1).toInt
-    val subQuery = Parser.parseQuery(args(0), qid)
-    val qidToQuery = mutable.HashMap[Int, PlanOperator](qid -> subQuery)
-    val queryGraph = QueryGraph(qidToQuery, null, null, null,
-      null, null, null, null, null, null)
-    Utils.printQueryGraph(queryGraph)
+    Optimizer.initializeOptimizer(args(2))
+    testOptimizerForPaceConfiguration(args(0), args(1))
+  }
+
+  private def testOptimizerForPaceConfiguration(dir: String, configName: String): Unit = {
+
+    val queryGraph = Utils.getParsedQueryGraph(dir, configName)
+    val newQueryGraph = Optimizer.OptimizeUsingBatchMQO(queryGraph)
+    // val newQueryGraph = Optimizer.OptimizedWithoutSharing(queryGraph)
+
+    Utils.printQueryGraph(newQueryGraph)
+    Utils.printPaceConfig(newQueryGraph)
+    Utils.printClusterSet(Optimizer.getMutliQueryCluster(newQueryGraph))
   }
 }

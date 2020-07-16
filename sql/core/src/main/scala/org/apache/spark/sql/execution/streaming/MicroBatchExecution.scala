@@ -234,7 +234,13 @@ class MicroBatchExecution(
 
     triggerExecutor.execute(() => {
 
-      if (enable_slothdb) client.isExecutable()
+      if (enable_slothdb) {
+        val execMessage = client.getExecMessage()
+        if (execMessage.terminate) {
+          client.stopClient()
+          stop()
+        }
+      }
 
       if (isActive) {
         var currentBatchHasNewData = false // Whether the current batch had new data
@@ -273,7 +279,20 @@ class MicroBatchExecution(
           if (isCurrentBatchConstructed) {
             if (currentBatchHasNewData) updateStatusMessage("Processing new data")
             else updateStatusMessage("No new data but cleaning up state")
-            runBatch(sparkSessionForStream)
+            try {
+              runBatch(sparkSessionForStream)
+            } catch {
+              case e: Throwable =>
+                if (enable_slothdb) { // Terminate this client
+                  val statMsg = new StatMessage(uid)
+                  statMsg.batchID = -1
+                  statMsg.execTime = 0
+                  client.reportStatMessage(statMsg)
+                  client.getExecMessage()
+                  client.stopClient()
+                }
+                throw e
+            }
           } else {
             updateStatusMessage("Waiting for data to arrive")
           }
@@ -287,10 +306,17 @@ class MicroBatchExecution(
 
         // If the current batch has been executed, then increment the batch id and reset flag.
         // Otherwise, there was no data to execute the batch and sleep for some time
-        if (isCurrentBatchConstructed) {
+        if (enable_slothdb) {
           currentBatchId += 1
-          isCurrentBatchConstructed = false
-        } else Thread.sleep(pollingDelayMs)
+           if (isCurrentBatchConstructed) {
+            isCurrentBatchConstructed = false
+          }
+        } else {
+          if (isCurrentBatchConstructed) {
+            currentBatchId += 1
+            isCurrentBatchConstructed = false
+          } else Thread.sleep(pollingDelayMs)
+        }
 
         if (enable_slothdb) {
           val statMsg = new StatMessage(uid)

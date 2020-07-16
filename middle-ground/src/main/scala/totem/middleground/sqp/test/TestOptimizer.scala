@@ -41,23 +41,13 @@ object TestOptimizer {
     testOptimizerForMultiQuery(args(0), args(1))
   }
 
-  private def testOptimizerForSameQuery(fileName: String, qid: Int): Unit = {
-    val subQuery = Parser.parseQuery(fileName, qid)
-    Utils.printPlanGraph(
-      Array(Optimizer.OptimizeOneQuery(subQuery)))
-  }
-
   private def testOptimizerForMultiQuery(dir: String, configName: String): Unit = {
-    val configInfo = Utils.parseConfigFile(configName)
 
-    val queries = configInfo.map(info => {
-      val queryName = info._1
-      val qid = info._2
-      val dfName = s"$dir/$queryName.df"
-      Parser.parseQuery(dfName, qid)
-    }).map(Optimizer.OptimizeOneQuery)
+    val queryGraph = Utils.getParsedQueryGraph(dir, configName)
+    val newQueryGraph = Optimizer.OptimizeUsingBatchMQO(queryGraph)
 
-    Utils.printPlanGraph(Optimizer.OptimizeUsingBatchMQO(queries))
+    Utils.printQueryGraph(newQueryGraph)
+    Utils.printClusterSet(Optimizer.getMutliQueryCluster(newQueryGraph))
   }
 
 }

@@ -53,8 +53,8 @@ object Parser {
   private val SPARKSTR = "spark"
   private val LITSTR = "lit(1L)"
 
-  private val INNER = 1
-  private val OUTER = 0
+  val INNER = 1
+  val OUTER = 0
 
   def parseQuery(fileName: String, qid: Int): PlanOperator = {
     val lines = Source.fromFile(fileName).getLines().map(_.trim).toArray

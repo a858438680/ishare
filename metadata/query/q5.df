@@ -21,7 +21,7 @@ def execQ5(spark: SparkSession): Unit = {
     .join(c, $"o_custkey" === $"c_custkey")
 
   return query_a
-    .join(query_b, $"s_nationkey" === $"c_nationkey" and $"s_suppkey" === $"l_suppkey")
+    .join(query_b, $"s_suppkey" === $"l_suppkey" and $"s_nationkey" === $"c_nationkey")
     .groupBy($"n_name")
     .agg(
       sum_disc_price($"l_extendedprice", $"l_discount").as("revenue"))

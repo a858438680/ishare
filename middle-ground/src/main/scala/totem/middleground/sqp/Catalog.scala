@@ -20,12 +20,16 @@
 package totem.middleground.sqp
 
 import scala.collection.immutable.HashMap
+import scala.collection.immutable.HashSet
 import scala.collection.mutable
 import scala.io.Source
 
 object Catalog {
 
   private var catalog: Catalog = _
+
+  private val MAX_BATCH_NUM = 100
+  private val MIN_BATCH_SIZE = 50.0
 
   def initCatalog(predFile: String): Unit = {
     catalog = new Catalog(predFile)
@@ -38,6 +42,10 @@ object Catalog {
 
   def getSelectivity(predStr: String): Double = {
     catalog.getSelectivity(predStr)
+  }
+
+  def getPostFilterSelectivity(postFilter: String): Double = {
+    catalog.getPostFilterSelectivity(postFilter)
   }
 
   def getTableSize(tableName: String): Double = {
@@ -56,6 +64,12 @@ object Catalog {
     catalog.getTableAlias(tableName)
   }
 
+  def getGroupNum(columns: mutable.HashSet[String]): Double = {
+    catalog.getGroupNum(columns)
+  }
+
+  def getMaxBatchNum: Int = MAX_BATCH_NUM
+  def getMinBatchSize: Double = MIN_BATCH_SIZE
 }
 
 class Catalog (predFile: String) {
@@ -97,9 +111,91 @@ class Catalog (predFile: String) {
 
     // Region
     "n_regionkey:r_regionkey" -> 1.0,
-    "r_regionkey:n_regionkey" -> 5.0
+    "r_regionkey:n_regionkey" -> 5.0,
+
+    // Q21
+    "l_orderkey:l2_orderkey" -> 1.0,
+    "l2_orderkey:l_orderkey" -> 1.0,
+    "l_orderkey:l3_orderkey" -> 1.0,
+    "l3_orderkey:l_orderkey" -> 1.0,
+
+    // Q15
+    "s_suppkey:supplier_no" -> 1.0,
+    "supplier_no:s_suppkey" -> 1.0,
+    "total_revenue:max_revenue" -> 1.0,
+    "max_revenue:total_revenue" -> 1.0,
+
+    // Q2
+    "p_partkey:min_partkey" -> 0.2,
+    "min_partkey:p_partkey" -> 1.0,
+
+    // Q17
+    "l_partkey:agg_l_partkey" -> 1.0,
+    "agg_l_partkey:l_partkey" -> 30.0,
+
+    // Q18
+    "o_orderkey:agg_orderkey" -> 4.0,
+    "agg_orderkey:o_orderkey" -> 1.0,
+    "l_orderkey:agg_orderkey" -> 1.0,
+    "agg_orderkey:l_orderkey" -> 4.0,
+
+    // Q11
+    "product_value:small_value" -> 1.0,
+    "small_value:product_value" -> 1000.0,
+
+    // Q20
+    "ps_partkey:agg_l_partkey" -> 1.0,
+    "agg_l_partkey:ps_partkey" -> 4.0,
+
+    // Q22
+    "c_acctbal:avg_acctbal" -> 1.0,
+    "avg_acctbal:c_acctbal" -> 1000.0,
+
+    // Q7
+    "s_nationkey:n1_nationkey" -> 1.0,
+    "n1_nationkey:s_nationkey" -> 400.0,
+    "c_nationkey:n2_nationkey" -> 1.0,
+    "n2_nationkey:c_nationkey" -> 400.0,
+
+    // Q8
+    "c_nationkey:n1_nationkey" -> 1.0,
+    "n1_nationkey:c_nationkey" -> 6000.0,
+    "n1_regionkey:r_regionkey" -> 1.0,
+    "r_regionkey:n1_regionkey" -> 5.0,
+    "s_nationkey:n2_nationkey" -> 1.0,
+    "n2_nationkey:s_nationkey" -> 400.0
 
   )
+
+  val groupNumInfo = Array(
+    (HashSet("l_returnflag", "l_linestatus"), 4),
+    (HashSet("ps_partkey"), 100000),
+    (HashSet("l_orderkey", "o_orderdate", "o_shippriority"), 1),
+    (HashSet("o_orderpriority"), 1),
+    (HashSet("n_name"), 5),
+    (HashSet("supp_nation", "cust_nation", "l_year"), 2),
+    (HashSet("o_year"), 1),
+    (HashSet("nation", "o_year"), 175),
+    (HashSet("c_custkey", "c_name", "c_acctbal", "c_phone", "n_name",
+     "c_address", "c_comment"), 44124),
+    (HashSet("l_shipmode"), 1),
+    (HashSet("c_custkey"), 150000),
+    (HashSet("c_count"), 42),
+    (HashSet("l_suppkey"), 10000),
+    (HashSet("p_brand", "p_type", "p_size"), 7092),
+    (HashSet("l_partkey"), 200000),
+    (HashSet("l_orderkey"), 1500000),
+    (HashSet("c_name", "c_custkey", "o_orderkey", "o_orderdate", "o_totalprice"), 10),
+    (HashSet("l_partkey", "l_suppkey"), 344404),
+    (HashSet("s_name"), 1),
+    (HashSet("cntrycode"), 2)
+  )
+
+  val postFilterSelectivity = HashMap(
+    """$"l_quantity" < $"avg_quantity"""" -> 0.08,
+    """.filter(($"supp_nation" === "FRANCE" and $"cust_nation" === "GERMANY") """ +
+      """or ($"supp_nation" === "GERMANY" and $"cust_nation" === "FRANCE"))""" -> 0.1,
+    """.filter($"sum_quantity" > 300)""" -> 0.01)
 
   val SF = 1
 
@@ -216,9 +312,14 @@ class Catalog (predFile: String) {
 
   def getJoinCardinality(leftKey: String, rightKey: String,
                          leftCard: Double, rightCard: Double): Double = {
-    val card1 = estimateJoinCardHelper(leftKey, rightKey, leftCard, rightCard)
-    val card2 = estimateJoinCardHelper(rightKey, leftKey, rightCard, leftCard)
-    math.min(card1, card2)
+    if (leftCard < 0.01 || rightCard < 0.01) return 0.0
+    val card1 = estimateJoinCardHelper(leftKey, rightKey)
+    val card2 = estimateJoinCardHelper(rightKey, leftKey)
+    val maxCard = math.min(card1, card2)
+
+    val leftTableSize = getTableSizeFromKey(leftKey)
+    val rightTableSize = getTableSizeFromKey(rightKey)
+    maxCard * (leftCard/leftTableSize) * (rightCard/rightTableSize)
   }
 
   def getAllAttrs(tableName: String): mutable.HashSet[TypeAttr] = {
@@ -265,8 +366,7 @@ class Catalog (predFile: String) {
     typeStr
   }
 
-  private def estimateJoinCardHelper(leftKey: String, rightKey: String,
-                                     leftCard: Double, rightCard: Double): Double = {
+  private def estimateJoinCardHelper(leftKey: String, rightKey: String): Double = {
     val ratio = cardRatio.getOrElse(s"$leftKey:$rightKey", {
 
       System.err.println(s"$leftKey:$rightKey Not Recognized")
@@ -274,12 +374,13 @@ class Catalog (predFile: String) {
       1.0
     })
 
+    val leftTableSize = getTableSizeFromKey(leftKey)
     val rightTableSize = getTableSizeFromKey(rightKey)
 
     val maxDistinctValue = rightTableSize/ratio
-    val distinctValue = math.min(maxDistinctValue, rightCard)
+    val distinctValue = math.min(maxDistinctValue, rightTableSize)
 
-    leftCard * (rightCard/distinctValue)
+    leftTableSize * (rightTableSize/distinctValue)
   }
 
   private def getTableNameFromKey(key: String): String = {
@@ -293,6 +394,20 @@ class Catalog (predFile: String) {
       case "p_" => "part"
       case "n_" => "nation"
       case "r_" => "region"
+      case "l2_" => "lineitem" // Q21
+      case "l3_" => "lineitem" // Q21
+      case "supplier_" => "supplier" // Q15
+      case "total_" => "supplier" // Q15
+      case "max_" => "supplier"  // Q15
+      case "min_" => "part" // Q2
+      case "agg_" =>
+        if (key.compareTo("agg_l_partkey") == 0) "part" // Q17/Q20
+        else "orders" // Q18
+      case "small_" => "region" // Q11
+      case "product_" => "supplier" // Q11
+      case "avg_" => "customer" // Q22
+      case "n1_" => "nation" // Q7
+      case "n2_" => "nation" // Q7
       case _ =>
         System.err.println(s"Key $key Not Recognized")
         System.exit(1)
@@ -302,6 +417,10 @@ class Catalog (predFile: String) {
 
   private def getTableSizeFromKey(key: String): Double = {
     getTableSize(getTableNameFromKey(key))
+  }
+
+  def getPostFilterSelectivity(postFilter: String): Double = {
+    postFilterSelectivity.getOrElse(postFilter.trim, 1.0)
   }
 
   def getSelectivity(predStr: String): Double = {
@@ -314,6 +433,27 @@ class Catalog (predFile: String) {
 
   def getTableSize(tableName: String): Double = {
     baseTableSize(tableName.toLowerCase)
+  }
+
+  def getGroupNum(columns: mutable.HashSet[String]): Double = {
+    var groupNum = 1.0
+    var findGroup = false
+    groupNumInfo.foreach(pair => {
+      val candSet = pair._1
+      val candGroupNum = pair._2
+      if (candSet.diff(columns).isEmpty && columns.diff(candSet).isEmpty) {
+        groupNum = candGroupNum
+        findGroup = true
+      }
+    })
+
+    if (!findGroup) {
+      val groupByStrBuf = new StringBuffer()
+      columns.foreach(col => {groupByStrBuf.append(s"$col:")})
+      System.err.println(s"GroupBy columns $groupByStrBuf not found")
+    }
+
+    groupNum
   }
 
 }

@@ -35,6 +35,7 @@ abstract class PlanOperator (qidSet: Array[Int],
   var id: Int = _
   var signature: String = ""
   var internalQidSet = qidSet
+  var copyOP: PlanOperator = _
 
   // These attributes are for code generation
   var subQueryName: String = _
@@ -42,6 +43,12 @@ abstract class PlanOperator (qidSet: Array[Int],
   var possibleOutputAttrs = mutable.HashSet.empty[TypeAttr]
   var requireOutputAttrs = mutable.HashSet.empty[TypeAttr]
   var requireOutputArray: Array[TypeAttr] = _
+
+  // These attributes are for cost estimation
+  val cardMap = mutable.HashMap.empty[Int, Double]
+  val delCardMap = mutable.HashMap.empty[Int, Double]
+  val offSetMap = mutable.HashMap.empty[Int, mutable.HashMap[Int, Double]]
+  val delOffSetMap = mutable.HashMap.empty[Int, mutable.HashMap[Int, Double]]
 
   def setChildren(childOperators: Array[PlanOperator]): Unit = {
     this.childOps = childOperators
@@ -94,6 +101,15 @@ abstract class PlanOperator (qidSet: Array[Int],
     planOperator
   }
 
+  def resetCostInfo(): Unit
+
+  protected def basicResetCostInfo(): Unit = {
+    cardMap.clear()
+    delCardMap.clear()
+    offSetMap.clear()
+    delOffSetMap.clear()
+  }
+
   def getQidSet: Array[Int] = internalQidSet
   def setQidSet(newQidSet: Array[Int]): Unit = {
     this.internalQidSet = newQidSet
@@ -107,6 +123,8 @@ class ScanOperator (qidSet: Array[Int],
                     dfStr: String,
                     tableName: String)
   extends PlanOperator(qidSet, outputAttrs, referenceAttrs, aliasAttrs, dfStr) {
+
+  var batchIdx = 0
 
   override def toString: String = {
     val  qidSetStr = Utils.qidSetToString(internalQidSet)
@@ -125,6 +143,11 @@ class ScanOperator (qidSet: Array[Int],
   }
 
   def getTableName: String = tableName
+
+  override def resetCostInfo(): Unit = {
+    super.basicResetCostInfo()
+    batchIdx = 0
+  }
 
 }
 
@@ -156,6 +179,10 @@ class ProjectOperator (qidSet: Array[Int],
     val newOP =
       new ProjectOperator(qidSet, outputAttrs, referenceAttrs, aliasAttrs, dfStr)
     super.basicCopy(newOP)
+  }
+
+  override def resetCostInfo(): Unit = {
+    super.basicResetCostInfo()
   }
 
 }
@@ -205,6 +232,10 @@ class SelectOperator (qidSet: Array[Int],
     super.basicCopy(newOP)
   }
 
+  override def resetCostInfo(): Unit = {
+    super.basicResetCostInfo()
+  }
+
 }
 
 class JoinOperator (qidSet: Array[Int],
@@ -217,6 +248,9 @@ class JoinOperator (qidSet: Array[Int],
                     joinType: String,
                     postFilter: String)
   extends PlanOperator(qidSet, outputAttrs, referenceAttrs, aliasAttrs, dfStr) {
+
+  val innerStateSizeMap = mutable.HashMap.empty[Int, Double]
+  val outerStateSizeMap = mutable.HashMap.empty[Int, Double]
 
   override def toString: String = {
     val qidSetStr = Utils.qidSetToString(internalQidSet)
@@ -255,6 +289,14 @@ class JoinOperator (qidSet: Array[Int],
   }
 
   def getJoinType: String = joinType
+
+  def getPostFilter(): String = postFilter
+
+  override def resetCostInfo(): Unit = {
+    super.basicResetCostInfo()
+    innerStateSizeMap.clear()
+    outerStateSizeMap.clear()
+  }
 }
 
 class AggOperator (qidSet: Array[Int],
@@ -266,6 +308,8 @@ class AggOperator (qidSet: Array[Int],
                  groupByAttrs: mutable.HashSet[String],
                  aggFunc: mutable.HashMap[String, String])
   extends PlanOperator(qidSet, outputAttrs, referenceAttrs, aliasAttrs, dfStr) {
+
+  var stateSize = 0.0
 
   override def toString: String = {
     val qidSetStr = Utils.qidSetToString(internalQidSet)
@@ -289,6 +333,11 @@ class AggOperator (qidSet: Array[Int],
       new AggOperator(qidSet, outputAttrs, referenceAttrs, aliasAttrs,
         dfStr, aliasFunc, groupByAttrs, aggFunc)
     super.basicCopy(newOP)
+  }
+
+  override def resetCostInfo(): Unit = {
+    super.basicResetCostInfo()
+    stateSize = 0.0
   }
 
   def getGroupByAttrs: mutable.HashSet[String] = groupByAttrs
@@ -317,6 +366,10 @@ extends PlanOperator(qidSet, outputAttrs, referenceAttrs, aliasAttrs, dfStr) {
     super.basicCopy(newOP)
   }
 
+  override def resetCostInfo(): Unit = {
+    super.basicResetCostInfo()
+  }
+
 }
 
 class DummyOperator(qidSet: Array[Int],
@@ -337,6 +390,10 @@ extends PlanOperator(qidSet, outputAttrs, referenceAttrs, aliasAttrs, dfStr) {
 
   override def copy(): PlanOperator = {
     this
+  }
+
+  override def resetCostInfo(): Unit = {
+    super.basicResetCostInfo()
   }
 
 }

@@ -1,0 +1,13 @@
+def execQ23(spark: SparkSession): Unit = {
+
+  val s = DataUtils.loadStreamTable(spark, "supplier", "s", tpchSchema)
+
+  val n = DataUtils.loadStreamTable(spark, "nation", "n", tpchSchema)
+  val r = DataUtils.loadStreamTable(spark, "region", "r", tpchSchema)
+    .filter($"r_name" === "ASIA")
+
+  return r
+    .join(n, $"r_regionkey" === $"n_regionkey")
+    .join(s, $"n_nationkey" === $"s_nationkey")
+
+}

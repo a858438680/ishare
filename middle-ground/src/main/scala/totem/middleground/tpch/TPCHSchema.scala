@@ -153,6 +153,7 @@ class TPCHSchema {
   def lineitemSize: Int =
     if (scaleFactor == 10) 59986052
     else if (scaleFactor == 0.1) 600572
+    else if (scaleFactor == 1) 6001215
     else (6000000 * scaleFactor).toInt
   def ordersSize: Int = (1500000 * scaleFactor).toInt
   def customerSize: Int = (150000 * scaleFactor).toInt

@@ -27,7 +27,7 @@ case class SubQueryInfo (qidArray: Array[Int],
   def extractQidSet(): Long = {
     var qidSet: Long = 0
     qidArray.foreach(qid => {
-      qidSet |= (1 << qid)
+      qidSet |= (1L << qid)
     })
     qidSet
   }

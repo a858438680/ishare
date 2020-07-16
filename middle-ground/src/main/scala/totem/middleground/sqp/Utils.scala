@@ -28,10 +28,56 @@ object Utils {
   private val INDENT = "\t"
   private val NULLSTR = ""
 
-  def printPlanGraph(rootOPArray: Array[PlanOperator]): Unit = {
+  def printClusterSet(cluster: mutable.HashSet[mutable.HashSet[Int]]): Unit = {
+    println("\nQid Cluster After Optimization")
+    cluster.zipWithIndex.foreach(pair => {
+      val qidSet = pair._1
+      val clusterIdx = pair._2 + 1
+      val qidSetStr = qidSetToString(qidSet.toArray)
+      println(s"Cluster $clusterIdx: $qidSetStr")
+    })
+  }
+
+  def printPaceConfig(queryGraph: QueryGraph): Unit = {
+    val subQueries = queryGraph.subQueries
+    val qidToConstraints = queryGraph.qidToConstraints
+    val qidToFinalWork = queryGraph.qidToFinalWork
+
+    println("")
+    queryGraph.fullQidSet.foreach(qid => {
+      val constraint = qidToConstraints(qid)
+      val finalWork = qidToFinalWork(qid)
+
+      var uid = -1
+      subQueries.foreach(subQuery => {
+        if (subQuery.isInstanceOf[RootOperator] && subQuery.getQidSet(0) == qid) {
+          uid = subQuery.subQueryUID
+        }
+      })
+
+      println(s"Query $qid with constraint $constraint and finalwork $finalWork")
+      println("================================================================")
+      printPaceConfigHelper(uid, "", queryGraph.numBatches, queryGraph.queryDependency)
+      println("")
+
+    })
+  }
+
+  private def printPaceConfigHelper(uid: Int,
+                                    indent: String,
+                                    batchNums: Array[Int],
+                                    queryDependency: mutable.HashMap[Int, mutable.HashSet[Int]]):
+  Unit = {
+    println(s"${indent}Q_${uid}: ${batchNums(uid)}")
+    queryDependency(uid).foreach(childUid => {
+      printPaceConfigHelper(childUid, indent + "\t", batchNums, queryDependency)
+    })
+  }
+
+  def printQueryGraph(queryGraph: QueryGraph): Unit = {
 
     val queue = new mutable.Queue[PlanOperator]
-    rootOPArray.foreach(queue.enqueue(_))
+    queryGraph.qidToQuery.foreach(pair => queue.enqueue(pair._2))
     val visited = mutable.HashSet.empty[PlanOperator]
 
     while (queue.nonEmpty) {
@@ -71,11 +117,45 @@ object Utils {
     }
   }
 
-  def parseConfigFile(configName: String): Array[(String, Int)] = {
+  def resetCopy(op: PlanOperator): Unit = {
+    op.copyOP = null
+    op.childOps.foreach(resetCopy)
+  }
+
+  def getParsedQueryGraph(dir: String, configName: String): QueryGraph = {
+    val configInfo = Utils.parseConfigFile(configName)
+
+    val qidToQuery = mutable.HashMap.empty[Int, PlanOperator]
+    val qidToConstraints = mutable.HashMap.empty[Int, Double]
+    val fullQidSet = mutable.HashSet.empty[Int]
+    configInfo.foreach(info => {
+      val queryName = info._1
+      val qid = info._2
+      val constraint = info._3
+      val dfName = s"$dir/$queryName.df"
+      val query = Parser.parseQuery(dfName, qid)
+
+      fullQidSet.add(qid)
+      qidToQuery.put(qid, query)
+      qidToConstraints.put(qid, constraint)
+    })
+
+    val qidToFinalWork = mutable.HashMap.empty[Int, Double]
+    val qidToUids = mutable.HashMap.empty[Int, mutable.HashSet[Int]]
+    val uidToQid = mutable.HashMap.empty[Int, Int]
+    val queries = Array.empty[PlanOperator]
+    val queryDependency = mutable.HashMap.empty[Int, mutable.HashSet[Int]]
+    val schedulingOrder = Array.empty[Int]
+    val numBatches = Array.empty[Int]
+    QueryGraph(qidToQuery, qidToConstraints, fullQidSet,
+      queries, qidToUids, uidToQid, queryDependency, qidToFinalWork, schedulingOrder, numBatches)
+  }
+
+  def parseConfigFile(configName: String): Array[(String, Int, Double)] = {
     val lines = Source.fromFile(configName).getLines().map(_.trim).toArray
     lines.map(line => {
       val configInfo = line.split(",").map(_.trim)
-      (configInfo(0), configInfo(1).toInt)
+      (configInfo(0), configInfo(1).toInt, configInfo(2).toDouble)
     })
   }
 
@@ -143,3 +223,81 @@ object Utils {
   }
 
 }
+
+class ProgressSimulator(maxBatchNum: Int,
+                        numBatchArray: Array[Int],
+                        queryDependency: mutable.HashMap[Int, mutable.HashSet[Int]]) {
+
+  private val numSubQ = numBatchArray.length
+  private val batchIDArray = new Array[Int](numSubQ)
+  for (idx <- batchIDArray.indices) batchIDArray(idx) = 0
+
+  private val candidateSet = new mutable.HashSet[Int]
+  private var step = 1
+
+  def nextStep(): (Int, Array[mutable.HashSet[Int]]) = {
+
+    if (step > maxBatchNum) return (step, Array.empty)
+
+    val progress = step.toDouble/maxBatchNum.toDouble
+    for (uid <- batchIDArray.indices) {
+      if (numBatchArray(uid) > 0) {
+        val threshold = (batchIDArray(uid) + 1).toDouble / numBatchArray(uid).toDouble
+        if (progress >= threshold) {
+          candidateSet.add(uid)
+          batchIDArray(uid) += 1
+        }
+      }
+    }
+
+    val setArray = buildDependencySet(candidateSet)
+    val oldStep = step
+    step += 1
+
+    candidateSet.clear()
+
+    (oldStep, setArray)
+  }
+
+  private def buildDependencySet(candidateSet: mutable.HashSet[Int]):
+  Array[mutable.HashSet[Int]] = {
+    if (queryDependency == null) return Array(candidateSet)
+
+    val buf = new ArrayBuffer[mutable.HashSet[Int]]
+    while (candidateSet.nonEmpty) {
+      val tmpHashSet = new mutable.HashSet[Int]
+
+      candidateSet.foreach(uid => {
+        queryDependency.get(uid) match {
+          case None => tmpHashSet.add(uid)
+          case Some(depSet) =>
+            val leafNode =
+              !depSet.exists(depUID => {
+                candidateSet.contains(depUID)
+              })
+            if (leafNode) tmpHashSet.add(uid)
+        }
+      })
+
+      tmpHashSet.foreach(uid => {
+        candidateSet.remove(uid)
+      })
+
+      buf.append(tmpHashSet)
+    }
+
+    buf.toArray
+  }
+
+}
+
+case class QueryGraph(qidToQuery: mutable.HashMap[Int, PlanOperator],
+                      qidToConstraints: mutable.HashMap[Int, Double],
+                      fullQidSet: mutable.HashSet[Int],
+                      subQueries: Array[PlanOperator],
+                      qidToUids: mutable.HashMap[Int, mutable.HashSet[Int]],
+                      uidtoQid: mutable.HashMap[Int, Int],
+                      queryDependency: mutable.HashMap[Int, mutable.HashSet[Int]],
+                      qidToFinalWork: mutable.HashMap[Int, Double],
+                      schedulingOrder: Array[Int],
+                      numBatches: Array[Int])

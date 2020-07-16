@@ -32,6 +32,7 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sqpmeta.SubQueryInfo
 import org.apache.spark.sql.sqpnetwork.MetaServer
 
+
 object TestSQP {
 
   def main(args: Array[String]): Unit = {
@@ -76,7 +77,10 @@ object TestSQP {
     Optimizer.initializeOptimizer(predFile)
     val optimizedQueries = optimizeMultiQuery(dfDir, configFile, executionMode)
 
+    val start = System.nanoTime()
     val pair = QueryGenerator.generateQueryAndConfiguration(optimizedQueries)
+    println(s"Query generation takes ${(System.nanoTime() - start)/1000000} ms\n")
+
     val subQueries = pair._1
     val queryConfig = pair._2
 
@@ -88,28 +92,32 @@ object TestSQP {
 
   private def optimizeMultiQuery(dir: String,
                                  configName: String,
-                                 executionMode: ExecutionMode.Value): Array[PlanOperator] = {
-    val configInfo = Utils.parseConfigFile(configName)
+                                 executionMode: ExecutionMode.Value): QueryGraph = {
+    var start = System.nanoTime()
+    val queryGraph = Utils.getParsedQueryGraph(dir, configName)
+    val parseTime = (System.nanoTime() - start)/1000000
 
-    val queries = configInfo.map(info => {
-      val queryName = info._1
-      val qid = info._2
-      val dfName = s"$dir/$queryName.df"
-      Parser.parseQuery(dfName, qid)
-    })
+    println(s"Parsing takes $parseTime ms")
 
-    if (executionMode == ExecutionMode.BatchShare) {
-      Optimizer.OptimizeUsingBatchMQO(queries)
-    } else if (executionMode == ExecutionMode.SQPShare) {
-      Optimizer.OptimizeUsingSQP(queries)
-    } else { // No Sharing
-      queries
-    }
+    start = System.nanoTime()
+    val optimizedGraph =
+      if (executionMode == ExecutionMode.BatchShare) {
+        Optimizer.OptimizeUsingBatchMQO(queryGraph)
+      } else if (executionMode == ExecutionMode.SQPShare) {
+        Optimizer.OptimizeUsingSQP(queryGraph)
+      } else { // No Sharing
+        Optimizer.OptimizedWithoutSharing(queryGraph)
+      }
+    val optTime = (System.nanoTime() - start)/1000000
+    Utils.printPaceConfig(optimizedGraph)
 
+    println(s"Optimization takes $optTime ms\n")
+
+    optimizedGraph
   }
 }
 
-class TestSQP(bootstrap: String, shuffleNum: String, statDIR: String, SF: Double,
+class TestSQP (bootstrap: String, shuffleNum: String, statDIR: String, SF: Double,
               hdfsRoot: String, inputPartitions: Int, kafkaCommand: String,
               zookeeper: String, hdfsCommand: String, port: Int,
               executionMode: ExecutionMode.Value,
@@ -143,6 +151,7 @@ class TestSQP(bootstrap: String, shuffleNum: String, statDIR: String, SF: Double
   private val queryNames = queryConfig.queryNames
   private val constraints = queryConfig.constraints
   private val subQueryInfos = queryConfig.subQueryInfo
+  private val schedulingOrder = queryConfig.schedulingOrder
   private val queryDependency = queryConfig.queryDependency
   private val shareTopics = queryConfig.shareTopics
 
@@ -161,7 +170,8 @@ class TestSQP(bootstrap: String, shuffleNum: String, statDIR: String, SF: Double
   })
 
   private val serverThread =
-    new ServerThread(numSubQ, port, queryNames, numBatches, queryDependency, subQueryInfos)
+    new ServerThread(numSubQ, port, queryNames, numBatches, schedulingOrder,
+      queryDependency, subQueryInfos, this)
 
   private def createSharedTopics(): Unit = {
     shareTopics.foreach(shareTopic => {
@@ -212,6 +222,13 @@ class TestSQP(bootstrap: String, shuffleNum: String, statDIR: String, SF: Double
     }
   }
 
+  def failCleanup(): Unit = {
+     if (executionMode != ExecutionMode.NoShare) {
+      deleteSharedTopics()
+      clearCheckpoint()
+    }
+  }
+
 }
 
 object ExecutionMode extends Enumeration {
@@ -225,93 +242,211 @@ object ExecutionMode extends Enumeration {
 class ServerThread (numSubQ: Int, port: Int,
                     qnames: Array[String],
                     numBatchArray: Array[Int],
+                    uidOrder: Array[Int],
                     dependency: mutable.HashMap[Int, mutable.HashSet[Int]],
-                    queryInfo: Array[SubQueryInfo]) extends Thread {
+                    queryInfo: Array[SubQueryInfo],
+                    driver: TestSQP) extends Thread {
 
-  private val MAX_BATCH_NUM = 100
   private val server = new MetaServer(numSubQ, port)
-  private val batchIDArray = new Array[Int](numSubQ)
   private var allTotalTime = 0.0
   private val totalTime = new Array[Double](numSubQ)
   private val finalTime = new Array[Double](numSubQ)
   private val initialStartupTime = 3000.0
+  private val maxBatchNum = Catalog.getMaxBatchNum
+  private val progressSimulator =
+    new ProgressSimulator(maxBatchNum, numBatchArray, dependency)
 
   server.loadSharedQueryInfo(queryInfo)
 
-  for (idx <- batchIDArray.indices) batchIDArray(idx) = 0
+  private var firstRun = true
 
   override def run(): Unit = {
     server.startServer()
 
-    val candidateSet = new mutable.HashSet[Int]
-    for (step <- 1 until MAX_BATCH_NUM + 1) {
-      val progress = step.toDouble/MAX_BATCH_NUM.toDouble
+    val finishedSet = new mutable.HashSet[Int]()
+    var curStep = 0
+    while (curStep < maxBatchNum) {
 
-      for (uid <- batchIDArray.indices) {
-        val threshold = (batchIDArray(uid) + 1).toDouble/numBatchArray(uid).toDouble
-        if (progress >= threshold) {
-          candidateSet.add(uid)
-          batchIDArray(uid) += 1
-        }
-      }
-
-      val setArray = buildDependencySet(candidateSet)
+      val pair = progressSimulator.nextStep()
+      curStep = pair._1
+      val setArray = pair._2
 
       setArray.foreach(execSet => {
         execSet.foreach(uid => {
           server.startOneExecution(uid)
           val msg = server.getStatMessage(uid)
-          totalTime(uid) += msg.execTime
-          allTotalTime += msg.execTime
-          if (step == MAX_BATCH_NUM) {
-            finalTime(uid) = msg.execTime
+          // clean up here
+          if (msg.batchID == -1) {
+            println("Caught an exception, start shutting down the program")
+            for (tmpId <- 0 until numSubQ) {
+              if (!finishedSet.contains(tmpId)) {
+                server.terminateQuery(tmpId)
+              }
+            }
+            server.stopServer()
+            driver.failCleanup()
+            System.exit(1)
+          }
+          val execTime =
+            if (firstRun) {
+              firstRun = false
+              msg.execTime - initialStartupTime
+            } else {
+              msg.execTime
+            }
+          totalTime(uid) += execTime
+          allTotalTime += execTime
+          if (curStep == maxBatchNum) {
+            finishedSet.add(uid)
+            finalTime(uid) = execTime
           }
         })
       })
 
-      candidateSet.clear()
     }
 
     server.stopServer()
   }
 
-  private def buildDependencySet(candidateSet: mutable.HashSet[Int]):
-  Array[mutable.HashSet[Int]] = {
-    if (dependency == null) return Array(candidateSet)
-
-    val buf = new ArrayBuffer[mutable.HashSet[Int]]
-    while (candidateSet.nonEmpty) {
-      val tmpHashSet = new mutable.HashSet[Int]
-
-      candidateSet.foreach(uid => {
-        dependency.get(uid) match {
-          case None => tmpHashSet.add(uid)
-          case Some(depSet) =>
-            val leafNode =
-              !depSet.exists(depUID => {
-                candidateSet.contains(depUID)
-              })
-            if (leafNode) tmpHashSet.add(uid)
-        }
-      })
-
-      tmpHashSet.foreach(uid => {
-        candidateSet.remove(uid)
-      })
-
-      buf.append(tmpHashSet)
-    }
-
-    buf.toArray
-  }
-
   def reportStats(): Unit = {
     for (uid <- 0 until numSubQ) {
-      printf("query %d, batchNum %d\n", uid, numBatchArray(uid))
+      println(s"${qnames(uid)}, batchNum ${numBatchArray(uid)}")
       printf("total time\tfinal time\n")
       printf("%.2f\t%.2f\n", totalTime(uid), finalTime(uid))
     }
-    printf("%.2f\n", allTotalTime - initialStartupTime)
+    printf("Total time for all queries: %.2f\n\n", allTotalTime)
+    printf("Latency (Shortest Job First)\n")
+    val rootQueries = uidOrder
+    val uidQueue = mutable.Queue.empty[Int]
+    rootQueries.foreach(uidQueue.enqueue(_))
+    val latencyMap = latencyWithOrder(uidQueue)
+    rootQueries.foreach(uid => {
+      val latency = latencyMap(uid)
+      println(s"Q${getRawQueryName(qnames(uid))}\t$latency")
+    })
+  }
+
+  private def getRawQueryName(queryName: String): String = {
+    val idx = queryName.indexOf("_")
+    queryName.substring(idx + 1)
+  }
+
+  private def latencyWithOrder(uidQueue: mutable.Queue[Int]): mutable.HashMap[Int, Double] = {
+    var curLatency = 0.0
+    val latencyMap = mutable.HashMap.empty[Int, Double]
+
+    val finished = mutable.HashSet.empty[Int]
+    while (uidQueue.nonEmpty) {
+      val curUid = uidQueue.dequeue()
+      val latency = getLatency(curUid, finished)
+      curLatency += latency
+      latencyMap.put(curUid, curLatency)
+    }
+
+    latencyMap
+  }
+
+  private def getLatency(uid: Int, finished: mutable.HashSet[Int]): Double = {
+    if (finished.contains(uid)) {
+      0.0
+    } else {
+      finished.add(uid)
+
+      finalTime(uid) +
+        dependency(uid).map(childUid => {
+          getLatency(childUid, finished)
+        }).foldRight(0.0)((A, B) => {
+          A + B
+        })
+
+    }
+  }
+
+  private def simulateLatency(): mutable.HashMap[Int, Double] = {
+    val candidateSet = mutable.HashSet.empty[Int]
+    for (uid <- 0 until numSubQ) candidateSet.add(uid)
+
+    var runningSet = mutable.HashMap.empty[Int, Double]
+    var curLatency = 0.0
+
+    val rootQueries = findRootQueries()
+    val latencyMap = mutable.HashMap.empty[Int, Double]
+
+    while (candidateSet.nonEmpty) {
+      val runnable = runnableSet(candidateSet)
+
+      runnable.foreach(uid => {
+        if (!runningSet.contains(uid)) runningSet.put(uid, finalTime(uid))
+      })
+
+      val triple = finishOneQuery(runningSet, curLatency)
+      val finishedUid = triple._1
+      curLatency = triple._2
+      runningSet = triple._3
+
+      if (rootQueries.contains(finishedUid)) {
+        latencyMap.put(finishedUid, curLatency)
+      }
+
+      candidateSet.remove(finishedUid)
+    }
+
+    latencyMap
+  }
+
+  private def runnableSet(candidateSet: mutable.HashSet[Int]): mutable.HashSet[Int] = {
+    if (dependency == null) return candidateSet
+
+    val runnable = mutable.HashSet.empty[Int]
+
+    candidateSet.foreach(uid => {
+      dependency.get(uid) match {
+        case None => runnable.add(uid)
+        case Some(depSet) =>
+          val leafNode =
+            !depSet.exists(depUID => {
+              candidateSet.contains(depUID)
+            })
+          if (leafNode) runnable.add(uid)
+      }
+    })
+
+    runnable
+  }
+
+  private def finishOneQuery(runningSet: mutable.HashMap[Int, Double],
+                             curLatency: Double):
+  (Int, Double, mutable.HashMap[Int, Double]) = {
+
+    val minLatencyPair =
+      runningSet.foldLeft((-1, Double.MaxValue))((minLatency, pair) => {
+        if (pair._2 < minLatency._2) pair
+        else minLatency
+      })
+
+    val minUid = minLatencyPair._1
+    val minLatency = minLatencyPair._2
+
+    val newLatency = (minLatency * runningSet.size.toDouble) + curLatency
+    val newRunningSet = mutable.HashMap.empty[Int, Double]
+    runningSet.remove(minUid)
+    runningSet.foreach(pair => {
+      newRunningSet.put(pair._1, pair._2 - minLatency)
+    })
+
+    (minUid, newLatency, newRunningSet)
+  }
+
+  private def findRootQueries(): mutable.HashSet[Int] = {
+    val rootQueries = mutable.HashSet.empty[Int]
+    for (uid <- 0 until numSubQ) rootQueries.add(uid)
+
+    dependency.foreach(pair => {
+      val depSet = pair._2
+      depSet.foreach(rootQueries.remove)
+    })
+
+    rootQueries
   }
 
 }

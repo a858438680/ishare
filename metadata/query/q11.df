@@ -13,9 +13,9 @@ def execQ11(spark: SparkSession): Unit = {
     .join(ps, $"s_suppkey" === $"ps_suppkey")
     .groupBy($"ps_partkey")
     .agg(
-        doubleSum($"ps_supplycost" * $"ps_availqty").as("value"))
-    .join(subquery, $"value" > $"small_value", "cross")
-    .select($"ps_partkey", $"value")
+        doubleSum($"ps_supplycost" * $"ps_availqty").as("product_value"))
+    .join(subquery, $"product_value" > $"small_value", "cross")
+    .select($"ps_partkey", $"product_value")
 
 }
 

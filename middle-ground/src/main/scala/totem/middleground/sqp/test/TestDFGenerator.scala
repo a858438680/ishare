@@ -42,19 +42,11 @@ object TestDFGenerator {
   }
 
   private def testDFGenerator(dir: String, configName: String): Unit = {
-    val configInfo = Utils.parseConfigFile(configName)
+    val queryGraph = Utils.getParsedQueryGraph(dir, configName)
+    val newQueryGraph = Optimizer.OptimizeUsingBatchMQO(queryGraph)
 
-    val queries = configInfo.map(info => {
-      val queryName = info._1
-      val qid = info._2
-      val dfName = s"$dir/$queryName.df"
-      Parser.parseQuery(dfName, qid)
-    }).map(Optimizer.OptimizeOneQuery)
-
-    val multiQuery = Optimizer.OptimizeUsingBatchMQO(queries)
-
-    Utils.printPlanGraph(multiQuery)
-    QueryGenerator.printSubQueryProgram(multiQuery)
+    Utils.printQueryGraph(newQueryGraph)
+    QueryGenerator.printSubQueryProgram(newQueryGraph)
   }
 
 }

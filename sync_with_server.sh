@@ -18,11 +18,12 @@ REMOTE_SPARK=$REMOTE:/tank/hdfs/totem/slothdb/spark
 #REMOTE_SPARK=$REMOTE:/mnt/hdd-2T-1/totem/spark/
 
 #scp $TPCH_JAR $SQL_JAR $EXAMPLE_JAR $REMOTE_SPARK/jars/
-scp  $TPCH_JAR $REMOTE_SPARK/jars/
-#scp $TPCH_JAR $REMOTE_SPARK/jars/
+scp $TPCH_JAR $REMOTE_SPARK/jars/
 #scp $CAT_JAR $REMOTE_SPARK/jars/
+scp $SQL_JAR $REMOTE_SPARK/jars/
+#scp $TPCH_JAR $REMOTE_SPARK/jars/
 #scp $TPCH_JAR $SQL_JAR $REMOTE_SPARK/jars/
-#scp $SQL_JAR $REMOTE_SPARK/jars/
 #scp $CAT_JAR $REMOTE_SPARK/jars/
 
+#scp -r metadata/* $REMOTE_SPARK/metadata/
 

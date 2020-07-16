@@ -46,12 +46,14 @@ class MetaClient (address: String, port: Int, uid: Int) {
     inputStream.readObject().asInstanceOf[PlanMessage]
   }
 
-  def isExecutable(): Boolean = {
+  def getExecMessage(): ExecMessage = {
+
     while (true) {
-      if (inputStream.readObject().isInstanceOf[ExecMessage]) return true
+      val execMessage = inputStream.readObject()
+      if (execMessage.isInstanceOf[ExecMessage]) return execMessage.asInstanceOf[ExecMessage]
     }
 
-    false
+    null
   }
 
   def reportStatMessage(msg: StatMessage): Unit = {

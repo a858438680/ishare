@@ -32,18 +32,20 @@ case class QueryConfig (queryNames: Array[String],
                         numBatches: Array[Int],
                         constraints: Array[String],
                         subQueryInfo: Array[SubQueryInfo],
+                        schedulingOrder: Array[Int],
                         queryDependency: mutable.HashMap[Int, mutable.HashSet[Int]],
                         shareTopics: Array[String])
 
 object QueryGenerator {
 
-  def printSubQueryProgram(multiQuery: Array[PlanOperator]): Unit = {
-    val subQueries = populateCompleteQueryInfo(multiQuery)
+  def printSubQueryProgram(queryGraph: QueryGraph): Unit = {
+    val newQueryGraph = populateCompleteQueryInfo(queryGraph)
+    val subQueries = newQueryGraph.subQueries
     subQueries.foreach(subQuery => {
       println(generateQueryStr(subQuery) + "\n")
     })
 
-    val queryConfig = generateQueryConfig(subQueries)
+    val queryConfig = generateQueryConfig(queryGraph)
     printQueryConfig(queryConfig)
   }
 
@@ -83,39 +85,30 @@ object QueryGenerator {
     strBuf.toString
   }
 
-  def generateQueryAndConfiguration(multiQuery: Array[PlanOperator]):
+  def generateQueryAndConfiguration(queryGraph: QueryGraph):
   (Array[TPCHQuery], QueryConfig) = {
 
-    val subQueries = populateCompleteQueryInfo(multiQuery)
-    val tpchQueries = subQueries.map(generateTPCHQuery)
-    val queryConfig = generateQueryConfig(subQueries)
+    val newQueryGraph = populateCompleteQueryInfo(queryGraph)
+    val tpchQueries = newQueryGraph.subQueries.map(generateTPCHQuery)
+    val queryConfig = generateQueryConfig(queryGraph)
 
     (tpchQueries, queryConfig)
   }
 
-  private def populateCompleteQueryInfo(multiQuery: Array[PlanOperator]):
-  Array[PlanOperator] = {
+  private def populateCompleteQueryInfo(queryGraph: QueryGraph):
+  QueryGraph = {
 
-    // Find subQueries
-    val subQueryBuf = ArrayBuffer.empty[PlanOperator]
-    val visited = mutable.HashSet.empty[PlanOperator]
-    multiQuery.foreach(subQueryBuf.append(_))
-    multiQuery.foreach(findSubQueries(_, subQueryBuf, visited))
-    val subQueries = subQueryBuf.toArray
-
-    // Assign uid and generate names
-    subQueries.zipWithIndex.foreach(pair => {
-      generateName(pair._1, pair._2)
-    })
+    val qidToQuery = queryGraph.qidToQuery
+    val subQueries = queryGraph.subQueries
 
     // Generate max output
-    multiQuery.foreach(generateMaxOutput)
+    qidToQuery.foreach(pair => generateMaxOutput(pair._2))
 
     // Generate required output
-    multiQuery.foreach(generateRequiredOutput(_, mutable.HashSet.empty[String]))
+    qidToQuery.foreach(pair => generateRequiredOutput(pair._2, mutable.HashSet.empty[String]))
     subQueries.foreach(_.genRequiredOutputArray())
 
-    subQueries
+    queryGraph
   }
 
   private def findSubQueries(op: PlanOperator,
@@ -184,9 +177,6 @@ object QueryGenerator {
               } else { // Here, alias only includes one attribute
                 val realName = projAlias(attrName)
                 val typeAttr = getTypeAttr(realName, maxOutput)
-                if (typeAttr == null) {
-                  val a = 1
-                }
                 val realType = typeAttr.typeStr
                 newOutput.add(TypeAttr(attrName, realType))
               }
@@ -269,8 +259,13 @@ object QueryGenerator {
         requiredOutput.foreach(newReqOutput.add)
         tree.getReferencedAttrs.foreach(newReqOutput.add)
 
+      case rootOperator: RootOperator =>
+        requiredOutput.foreach(newReqOutput.add)
+        rootOperator.childOps(0).getOutputAttrs.foreach(newReqOutput.add)
+
       case scan: ScanOperator =>
       case _ =>
+
     }
 
     tree.childOps.foreach(generateRequiredOutput(_, newReqOutput))
@@ -454,8 +449,9 @@ object QueryGenerator {
           newStrBuf.append(childStrs(0))
           newStrBuf.append("\n")
           newStrBuf.append(agg.getDFStr.trim)
-        case _ =>
+        case _ => // RootOperator
           newStrBuf.append(childStrs(0))
+          newStrBuf.append("\n.select(\"*\")")
       }
     }
 
@@ -475,46 +471,40 @@ object QueryGenerator {
     newStrBuf.toString
   }
 
-  private def generateQueryConfig(subQueries: Array[PlanOperator]): QueryConfig = {
-    // val numBatches = Array(2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-    //   2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2)
-    val numBatches = Array(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-      1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
-    val constraints = Array.fill[String](35)("1.0")
+  private def generateQueryConfig(queryGraph: QueryGraph): QueryConfig = {
+    val numBatches = queryGraph.numBatches
+    val constraints = Array.fill[String](numBatches.length)("1.0")
+    val queryDependency = queryGraph.queryDependency
+    val subQueries = queryGraph.subQueries
+    val schedulingOrder = queryGraph.schedulingOrder
 
     val queryNames = subQueries.map(_.subQueryName)
     val shareTopics = subQueries.filter(_.parentOps.length > 1).map(_.subQueryName)
 
-    val queryDependency = mutable.HashMap.empty[Int, mutable.HashSet[Int]]
     val subQueryInfo = subQueries.map(subQuery => {
 
-      val dependency = mutable.HashSet.empty[Int]
       val predInfoMap = mutable.HashMap.empty[Int, mutable.HashSet[PredInfo]]
       val aggCluster = new ArrayBuffer[Long]()
       val qidSet = new ArrayBuffer[Int]()
+      val isRoot = true
       subQuery.getQidSet.foreach(qidSet.append(_))
 
-      collectQueryInfo(subQuery, dependency, predInfoMap, aggCluster, true)
-      queryDependency.put(subQuery.subQueryUID, dependency)
-
+      collectQueryInfo(subQuery, predInfoMap, aggCluster, isRoot)
       SubQueryInfo(qidSet.toArray, predInfoMap, aggCluster.toArray)
     })
 
-    QueryConfig(queryNames, numBatches, constraints, subQueryInfo, queryDependency, shareTopics)
+    QueryConfig(queryNames, numBatches, constraints, subQueryInfo,
+      schedulingOrder, queryDependency, shareTopics)
   }
 
-  private def collectQueryInfo(subQuery: PlanOperator, dependency: mutable.HashSet[Int],
+  private def collectQueryInfo(subQuery: PlanOperator,
                                predInfoMap: mutable.HashMap[Int, mutable.HashSet[PredInfo]],
                                aggCluster: ArrayBuffer[Long], isRoot: Boolean): Unit = {
 
-    if (subQuery.parentOps.length > 1 && !isRoot) {
-
-     dependency.add(subQuery.subQueryUID)
-
-    } else {
+    if (subQuery.parentOps.length == 1 || isRoot) {
 
       subQuery.childOps.foreach(child => {
-        collectQueryInfo(child, dependency, predInfoMap, aggCluster, false)
+        collectQueryInfo(child, predInfoMap, aggCluster, false)
       })
 
       subQuery match {
@@ -534,7 +524,12 @@ object QueryGenerator {
         case agg: AggOperator =>
           if (aggCluster.isEmpty) {
             val qidSet = agg.getQidSet
-            qidSet.map(convertQidToBitVec).foreach(aggCluster.append(_))
+            var qidCluster = 0L
+            qidSet.foreach(qid => {
+              qidCluster |= (1L << qid)
+            })
+            aggCluster.append(qidCluster)
+            // qidSet.map(convertQidToBitVec).foreach(aggCluster.append(_))
           }
         case _ =>
       }

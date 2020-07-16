@@ -87,7 +87,7 @@ class ClientThread (address: String, port: Int,
     println(s"Client $uid receives the plan message")
 
     for (batchID <- 0 until numBatch) {
-      client.isExecutable()
+      client.getExecMessage()
 
       val msg = new StatMessage(uid)
       msg.setStateInfo(batchID, 0.0)
