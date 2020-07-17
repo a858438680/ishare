@@ -17,8 +17,6 @@
 
 package org.apache.spark.sql.execution.streaming.state
 
-import scala.collection.mutable.HashMap
-
 import org.apache.hadoop.conf.Configuration
 
 import org.apache.spark.TaskContext
@@ -200,9 +198,6 @@ class SlothThetaJoinStateManager (
   private val keyAttributes = keySchema.toAttributes
   private val keyToNumValues = new KeyToNumValuesStore()
   private val keyWithIndexToValue = new KeyWithIndexToValueStore()
-
-  // Clean up any state store resources if necessary at the end of the task
-  Option(TaskContext.get()).foreach { _.addTaskCompletionListener[Unit] { _ => abortIfNeeded() } }
 
   /** Helper trait for invoking common functionalities of a state store. */
   private abstract class StateStoreHandler(stateStoreType: StateStoreType) extends Logging {

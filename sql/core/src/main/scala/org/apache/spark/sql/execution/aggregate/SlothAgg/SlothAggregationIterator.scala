@@ -56,7 +56,7 @@ class SlothAggregationIterator (
     clusterID: Int)
 extends Iterator[InternalRow] with Logging {
 
-  private val opRtId = new SlothRuntimeOpId(stateInfo.get.operatorId, stateInfo.get.queryRunId)
+  private val opRtId = SlothRuntimeOpId(stateInfo.get.operatorId, stateInfo.get.queryRunId)
   private val retRT = SlothRuntimeCache.get(opRtId)
   private var aggRT =
     if (retRT != null) retRT.asInstanceOf[SlothAggIterRuntime]
@@ -517,15 +517,40 @@ extends Iterator[InternalRow] with Logging {
         // the map to create the sorter, their memory usages should not overlap, so it is safe
         // to just use the max of the two.
         val memoryConsumption = hashMapforResult.getPeakMemoryUsedBytes +
-          hashMapforMetaData.getMemoryConsumption +
-          {
-            if (hashMapforFullData != null) { hashMapforFullData.getMemoryConsumption }
-            else { 0L }
+          hashMapforMetaData.getMemoryConsumption + {
+          if (hashMapforFullData != null) {
+            hashMapforFullData.getMemoryConsumption
           }
+          else {
+            0L
+          }
+        }
         stateMemory += memoryConsumption
 
         val metrics = TaskContext.get().taskMetrics()
         metrics.incPeakExecutionMemory(memoryConsumption)
+
+        hashMapforResult.free()
+        hashMapforResult.purge()
+        hashMapforMetaData.abortIfNeeded()
+        if (hashMapforFullData != null) hashMapforFullData.abortIfNeeded()
+        stateStoreforResult.abortIfNeeded()
+
+        hashMapforMetaData.purge()
+        if (hashMapforFullData != null) hashMapforFullData.purge()
+        stateStoreforResult.purge()
+        if (aggRT == null) {
+          aggRT = SlothAggIterRuntime(
+            groupingProjection,
+            initialAggregationBuffer,
+            generateOutput,
+            hashMapforResult,
+            hashMapforMetaData,
+            hashMapforFullData,
+            stateStoreforResult)
+        }
+        SlothRuntimeCache.put(opRtId, aggRT)
+
       })
   }
 
@@ -617,8 +642,6 @@ extends Iterator[InternalRow] with Logging {
   }
 
   def onCompletion(): Unit = {
-    hashMapforResult.free()
-
     // numGroups.set(hashMapforMetaData.getNumKeys)
     numGroups += hashMapforMetaData.getNumKeys
 
@@ -630,21 +653,6 @@ extends Iterator[InternalRow] with Logging {
     }
 
     stateStoreforResult.commit()
-
-    hashMapforMetaData.purge()
-    if (hashMapforFullData != null) hashMapforFullData.purge()
-    stateStoreforResult.purge()
-    if (aggRT == null) {
-      aggRT = new SlothAggIterRuntime(
-        groupingProjection,
-        initialAggregationBuffer,
-        generateOutput,
-        hashMapforResult,
-        hashMapforMetaData,
-        hashMapforFullData,
-        stateStoreforResult)
-    }
-    SlothRuntimeCache.put(opRtId, aggRT)
   }
 }
 

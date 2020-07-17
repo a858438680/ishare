@@ -153,7 +153,7 @@ class SlothAggMetaMap (
     metaStore.commit()
   }
 
-  def abort(): Unit = {
+  def abortIfNeeded(): Unit = {
     metaStore.abortIfNeeded()
   }
 

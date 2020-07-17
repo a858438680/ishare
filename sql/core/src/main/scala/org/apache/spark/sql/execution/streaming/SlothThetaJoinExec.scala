@@ -19,6 +19,7 @@ package org.apache.spark.sql.execution.streaming
 
 import java.io.{BufferedReader, FileReader}
 
+import org.apache.spark.TaskContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SlothDBCostModel._
 import org.apache.spark.sql.catalyst.InternalRow
@@ -278,11 +279,18 @@ case class SlothThetaJoinExec (
         val combinedMetrics = StateStoreMetrics.combine(Seq(leftSideMetrics, rightSideMetrics))
         stateMemory += combinedMetrics.memoryUsedBytes
       }
+    }
 
+    // Clean up any state store resources if necessary at the end of the task
+    Option(TaskContext.get()).foreach { _.addTaskCompletionListener[Unit] { _ =>
+
+      thetaRunTime.leftStateManager.abortIfNeeded()
+      thetaRunTime.rightStateManager.abortIfNeeded()
       thetaRunTime.leftStateManager.purgeState()
       thetaRunTime.rightStateManager.purgeState()
       SlothRuntimeCache.put(opRtId, thetaRunTime)
-    }
+
+    }}
 
     CompletionIterator[InternalRow, Iterator[InternalRow]](
       outputIterWithMetrics, onAllCompletion)

@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.execution.streaming.state
 
+import java.time.LocalDateTime
 import java.util
 import java.util.concurrent.atomic.LongAdder
 
@@ -27,6 +28,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs._
 
 import org.apache.spark.{SparkConf, SparkEnv}
+import org.apache.spark.TaskContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow
 import org.apache.spark.sql.types.StructType
@@ -52,8 +54,13 @@ private[state] class SlothDBStateStoreProvider extends StateStoreProvider with L
     case object COMMITTED extends STATE
     case object ABORTED extends STATE
 
+
     private val newVersion = version + 1
     @volatile private var state: STATE = UPDATING
+
+    private val realPartitionID = TaskContext.getPartitionId()
+    private val debugInfo = s"for ${newVersion} of $this " +
+      s"with $realPartitionID"
 
     override def id: StateStoreId = SlothDBStateStoreProvider.this.stateStoreId
 
@@ -62,27 +69,31 @@ private[state] class SlothDBStateStoreProvider extends StateStoreProvider with L
     }
 
     override def put(key: UnsafeRow, value: UnsafeRow): Unit = {
-      verify(state == UPDATING, s"Cannot put after already ${state}")
+      verify(state == UPDATING, s"Cannot put after already ${state} " +
+        s"$debugInfo")
       val keyCopy = key.copy()
       val valueCopy = value.copy()
       mapToUpdate.put(keyCopy, valueCopy)
     }
 
     override def remove(key: UnsafeRow): Unit = {
-      verify(state == UPDATING, "Cannot remove after already committed or aborted")
+      verify(state == UPDATING, "Cannot remove after already committed or aborted " +
+        s"$debugInfo")
       mapToUpdate.remove(key)
     }
 
     override def getRange(
         start: Option[UnsafeRow],
         end: Option[UnsafeRow]): Iterator[UnsafeRowPair] = {
-      verify(state == UPDATING, "Cannot getRange after already committed or aborted")
+      verify(state == UPDATING, "Cannot getRange after already committed or aborted " +
+        s"$debugInfo")
       iterator()
     }
 
     /** Commit all the updates that have been made to the store, and return the new version. */
     override def commit(): Long = {
-      verify(state == UPDATING, s"Cannot commit after already ${state}")
+      verify(state == UPDATING, s"Cannot commit after already ${state}" +
+        s"$debugInfo")
 
       try {
         commitUpdates(newVersion, mapToUpdate)
@@ -109,7 +120,11 @@ private[state] class SlothDBStateStoreProvider extends StateStoreProvider with L
 
       // logInfo(s"Aborted version $newVersion for $this")
       // System.exit(1)
-      throw new IllegalArgumentException(s"Aborted version ${newVersion} for $this")
+      val curTime = LocalDateTime.now()
+      val threadID = Thread.currentThread().getId
+      val exception =
+        new IllegalArgumentException(s"$curTime: Aborted $debugInfo at thread $threadID")
+      throw exception
     }
 
     /**
@@ -281,7 +296,9 @@ private[state] class SlothDBStateStoreProvider extends StateStoreProvider with L
         "Reading snapshot file and delta files if needed..." +
         "Note that this is normal for the first batch of starting query.")
       if (version > 0) {
-        throw new IllegalArgumentException("Does not find a cache")
+        val str = s"[store ${stateStoreId.storeName}, " +
+          s"id = (op=${stateStoreId.operatorId},part=${stateStoreId.partitionId})]"
+        throw new IllegalArgumentException(s"Does not find a cache for $str version $version")
       } else {
         return new MapType
       }
@@ -290,7 +307,10 @@ private[state] class SlothDBStateStoreProvider extends StateStoreProvider with L
 
   private def verify(condition: => Boolean, msg: String): Unit = {
     if (!condition) {
-      throw new IllegalStateException(msg)
+      val curTime = LocalDateTime.now()
+      val threadID = Thread.currentThread().getId
+      val exception = new IllegalStateException(s"$curTime $msg at thread $threadID")
+      throw exception
     }
   }
 }

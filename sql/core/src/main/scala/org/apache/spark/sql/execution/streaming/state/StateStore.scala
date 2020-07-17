@@ -367,8 +367,16 @@ object StateStore extends Logging {
       startMaintenanceIfNeeded()
       val provider = loadedProviders.getOrElseUpdate(
         storeProviderId,
-        StateStoreProvider.createAndInit(
+        {
+          if (version > 0) {
+            val id = storeProviderId.storeId
+            val str = s"${id.storeName}[id=(op=${id.operatorId},part=${id.partitionId})"
+            printf(s"Not found $version $str\n")
+          }
+          StateStoreProvider.createAndInit(
           storeProviderId.storeId, keySchema, valueSchema, indexOrdinal, storeConf, hadoopConf)
+        }
+
       )
       reportActiveStoreInstance(storeProviderId)
       provider

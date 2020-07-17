@@ -21,6 +21,7 @@ import java.io.{BufferedReader, FileReader}
 
 import scala.collection.mutable
 
+import org.apache.spark.TaskContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SlothDBCostModel._
 import org.apache.spark.sql.catalyst.InternalRow
@@ -444,11 +445,17 @@ case class SlothSymmetricHashJoinExec(
         val combinedMetrics = StateStoreMetrics.combine(Seq(leftSideMetrics, rightSideMetrics))
         stateMemory += combinedMetrics.memoryUsedBytes
       }
+    }
 
+    Option(TaskContext.get()).foreach { _.addTaskCompletionListener[Unit] { _ =>
+
+      hashRunTime.leftStateManager.abortIfNeeded()
+      hashRunTime.rightStateManager.abortIfNeeded()
       hashRunTime.leftStateManager.purgeState()
       hashRunTime.rightStateManager.purgeState()
       SlothRuntimeCache.put(opRtId, hashRunTime)
-    }
+
+    }}
 
     CompletionIterator[InternalRow, Iterator[InternalRow]](
         outputIterWithMetrics, onAllCompletion)

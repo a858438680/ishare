@@ -295,7 +295,7 @@ class QueryExecution(val sparkSession: SparkSession, val logical: LogicalPlan) {
   // private def filterStartupTime = 5
   // private def sourceStartupTime = 5
 
-  private def perExecutionStartupTime = 0
+  private def perExecutionStartupTime = 60
   private def joinStartupTime = 0
   private def aggStartupTime = 0
   private def filterStartupTime = 0
@@ -413,7 +413,6 @@ class QueryExecution(val sparkSession: SparkSession, val logical: LogicalPlan) {
         print(s"aggQidCluster ${subQueryInfo.aggQidCluster.length} " +
           s"${subQueryInfo.aggQidCluster(0)}\n")
         agg.setAggQidCluster(subQueryInfo.aggQidCluster)
-        agg.setAggQidSet(subQueryInfo.extractQidSet())
 
       // We do not share non-inner join
       // and qid is only used for the non-inner join,
