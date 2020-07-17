@@ -289,17 +289,11 @@ class QueryExecution(val sparkSession: SparkSession, val logical: LogicalPlan) {
   }
 
   private def initialStarupTime = 0
-  // private def perExecutionStartupTime = 60
-  // private def joinStartupTime = 650
-  // private def aggStartupTime = 300
-  // private def filterStartupTime = 5
-  // private def sourceStartupTime = 5
-
   private def perExecutionStartupTime = 60
-  private def joinStartupTime = 0
-  private def aggStartupTime = 0
-  private def filterStartupTime = 0
-  private def sourceStartupTime = 0
+  private def joinStartupTime = 15
+  private def aggStartupTime = 15
+  private def filterStartupTime = 5
+  private def sourceStartupTime = 5
 
   private def getPerOpStartUpTime(plan: SparkPlan): Long = {
     val childCost = plan.children.map(getPerOpStartUpTime).sum

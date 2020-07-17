@@ -25,7 +25,7 @@ scp $SQL_JAR $REMOTE_SPARK/jars/
 #scp $TPCH_JAR $REMOTE_SPARK/jars/
 #scp $TPCH_JAR $SQL_JAR $REMOTE_SPARK/jars/
 #scp $CAT_JAR $REMOTE_SPARK/jars/
-#scp $CORE_JAR $REMOTE_SPARK/jars/
+scp $CORE_JAR $REMOTE_SPARK/jars/
 
 #scp -r metadata/* $REMOTE_SPARK/metadata/
 
