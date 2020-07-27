@@ -284,24 +284,37 @@ private[state] class SlothDBStateStoreProvider extends StateStoreProvider with L
 
     // Shortcut if the map for this version is already there to avoid a redundant put.
     val loadedCurrentVersionMap = synchronized {
-      Option(loadedMaps.remove(version))
+      var hitVersion = version
+      var finish = false
+      var retMap: Option[MapType] = null
+      while (!finish) {
+        retMap = Option(loadedMaps.remove(hitVersion))
+        if (retMap.isDefined || hitVersion <= 0)  {
+          finish = true
+        }
+        hitVersion -= 1
+      }
+      retMap
       // Option(loadedMaps.get(version))
     }
 
     if (loadedCurrentVersionMap.isDefined) {
       loadedMapCacheHitCount.increment()
-      return loadedCurrentVersionMap.get
+      loadedCurrentVersionMap.get
     } else {
       logWarning(s"The state for version $version doesn't exist in loadedMaps. " +
         "Reading snapshot file and delta files if needed..." +
         "Note that this is normal for the first batch of starting query.")
-      if (version > 0) {
-        val str = s"[store ${stateStoreId.storeName}, " +
-          s"id = (op=${stateStoreId.operatorId},part=${stateStoreId.partitionId})]"
-        throw new IllegalArgumentException(s"Does not find a cache for $str version $version")
-      } else {
-        return new MapType
-      }
+
+      new MapType
+
+      // if (version > 0) {
+      //   val str = s"[store ${stateStoreId.storeName}, " +
+      //     s"id = (op=${stateStoreId.operatorId},part=${stateStoreId.partitionId})]"
+      //   throw new IllegalArgumentException(s"Does not find a cache for $str version $version")
+      // } else {
+      //   new MapType
+      // }
     }
   }
 

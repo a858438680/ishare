@@ -251,7 +251,7 @@ class ServerThread (numSubQ: Int, port: Int,
   private var allTotalTime = 0.0
   private val totalTime = new Array[Double](numSubQ)
   private val finalTime = new Array[Double](numSubQ)
-  private val initialStartupTime = 3000.0
+  private val initialStartupTime = 4000.0
   private val maxBatchNum = Catalog.getMaxBatchNum
   private val progressSimulator =
     new ProgressSimulator(maxBatchNum, numBatchArray, dependency)

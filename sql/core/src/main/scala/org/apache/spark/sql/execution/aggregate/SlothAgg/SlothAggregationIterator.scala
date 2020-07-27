@@ -424,7 +424,7 @@ extends Iterator[InternalRow] with Logging {
           processDeclarative(buffer, row)
         })
       }
-      print(s"Sort Time ${(System.nanoTime() - start)/1000000} ms, ${numKeys} keys\n")
+      // print(s"Sort Time ${(System.nanoTime() - start)/1000000} ms, ${numKeys} keys\n")
     }
   }
 

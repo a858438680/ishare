@@ -117,7 +117,9 @@ case class SlothThetaJoinExec (
     sqlContext.sparkSession.conf.get(SQLConf.SLOTHDB_STAT_DIR).getOrElse("Nothing")
 
   override def requiredChildDistribution: Seq[Distribution] = {
-    UnspecifiedDistribution :: new SlothBroadcastDistribution() :: Nil
+    HashClusteredDistribution(left.output, stateInfo.map(_.numPartitions)) ::
+      new SlothBroadcastDistribution() :: Nil
+    // UnspecifiedDistribution :: new SlothBroadcastDistribution() :: Nil
   }
 
   override def output: Seq[Attribute] = joinType match {
@@ -615,6 +617,8 @@ case class SlothThetaJoinExec (
         // condition no matter what other side row it's matched with. This allows us to avoid
         // adding it to the state, and generate an outer join row immediately (or do nothing in
         // the case of inner join).
+
+        thisRow.setUpdate(false)
 
         val isInsert = thisRow.isInsert
         val isUpdate = thisRow.isUpdate
