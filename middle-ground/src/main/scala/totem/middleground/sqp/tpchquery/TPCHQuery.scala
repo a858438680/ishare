@@ -36,14 +36,17 @@ abstract class TPCHQuery extends Thread {
   protected var spark: SparkSession = _
 
   def initialize(query_name: String, uid: String, numBatch: String, constraint: String,
-                 SF: Double, tpchSchema: TPCHSchema, sparkSession: SparkSession): Unit = {
+                 SF: Double, tpchSchema: TPCHSchema): Unit = {
     this.query_name = query_name
     this.uid = uid
     this.numBatch = numBatch
     this.constraint = constraint
     this.tpchSchema = tpchSchema
-    this.spark = sparkSession
     this.SF = SF
+  }
+
+  def setSparkSession(sparkSession: SparkSession): Unit = {
+    this.spark = sparkSession
   }
 
   protected def loadSharedTable(spark: SparkSession,

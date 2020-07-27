@@ -24,7 +24,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.collection.mutable.{Map => MutableMap}
 
-import org.apache.spark.sql.{Dataset, SlothDBContext, SlothDBCostModel, SparkSession}
+import org.apache.spark.sql.{Dataset, OffsetManager, SlothDBContext, SlothDBCostModel, SparkSession}
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.{Alias, CurrentBatchTimestamp, CurrentDate, CurrentTimestamp}
 import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan, Project}
@@ -82,6 +82,9 @@ class MicroBatchExecution(
 
   // SlothDB: Cost model
   val slothCostModel = new SlothDBCostModel()
+
+  val offsetManager = new OffsetManager()
+  var totalBatchNum: Int = _
 
   // SQP: SubQueryInfo
   var subQueryInfo: SubQueryInfo = null
@@ -219,6 +222,7 @@ class MicroBatchExecution(
     // totem-sqp configuration
     val port = sparkSessionForStream.conf.get(SQLConf.SQP_PORT).getOrElse(8887)
     val numBatch = extraOptions.get(SQLConf.SLOTHDB_BATCH_NUM.key).getOrElse("-1").toInt
+    totalBatchNum = numBatch
     val uid = extraOptions.get(SQLConf.SQP_UID.key).getOrElse("-1").toInt
     isIntermediatePlan = extraOptions.get(SQLConf.SQP_MED_PLAN.key).getOrElse("false").toBoolean
     val client: MetaClient =
@@ -231,6 +235,11 @@ class MicroBatchExecution(
       client.startClient()
       subQueryInfo = client.getPlanMessage().getSubQInfo
     }
+
+    if (enable_slothdb) {
+      offsetManager.loadEndOffsets(getFinalOffsets())
+    }
+
 
     triggerExecutor.execute(() => {
 
@@ -454,6 +463,13 @@ class MicroBatchExecution(
   private def constructNextBatch(noDataBatchesEnabled: Boolean): Boolean = withProgressLocked {
     if (isCurrentBatchConstructed) return true
 
+    val nextBatch =
+      if (enable_slothdb) {
+        offsetManager.constructNewData(currentBatchId.toInt, totalBatchNum)
+      } else {
+        null
+      }
+
     // Generate a map from each unique source to the next available offset.
     val latestOffsets: Map[BaseStreamingSource, Option[Offset]] = uniqueSources.map {
       case s: Source =>
@@ -467,9 +483,16 @@ class MicroBatchExecution(
           // Once v1 streaming source execution is gone, we can refactor this away.
           // For now, we set the range here to get the source to infer the available end offset,
           // get that offset, and then set the range again when we later execute.
-          s.setOffsetRange(
+          if (enable_slothdb && nextBatch != null) {
+            val endOffset = toJava(nextBatch.get(s).map(off => s.deserializeOffset(off)))
+            s.setOffsetRange(
+              toJava(availableOffsets.get(s).map(off => s.deserializeOffset(off.json))),
+              endOffset)
+          } else {
+            s.setOffsetRange(
               toJava(availableOffsets.get(s).map(off => s.deserializeOffset(off.json))),
               Optional.empty())
+          }
         }
 
         val currentOffset = reportTimeTaken("getEndOffset") { s.getEndOffset() }

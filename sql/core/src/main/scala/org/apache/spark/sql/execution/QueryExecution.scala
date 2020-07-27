@@ -290,8 +290,8 @@ class QueryExecution(val sparkSession: SparkSession, val logical: LogicalPlan) {
 
   private def initialStarupTime = 0
   private def perExecutionStartupTime = 60
-  private def joinStartupTime = 40
-  private def aggStartupTime = 40
+  private def joinStartupTime = 15
+  private def aggStartupTime = 15
   private def filterStartupTime = 5
   private def sourceStartupTime = 5
 

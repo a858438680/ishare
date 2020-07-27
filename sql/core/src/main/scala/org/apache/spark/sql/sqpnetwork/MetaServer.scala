@@ -61,6 +61,24 @@ class MetaServer (numSubQ: Int, port: Int) {
     }
   }
 
+  def startOneQuery(): Unit = {
+    // Set up server sockets and threads
+    var socket: Socket = null
+    socket = ss.accept()
+    val outputStream = new ObjectOutputStream(socket.getOutputStream)
+    val inputStream = new ObjectInputStream(new BufferedInputStream(socket.getInputStream))
+    val uid = getUID(inputStream)
+
+    socketArray(uid) = socket
+    inputStreamArray(uid) = inputStream
+    outputStreamArray(uid) = outputStream
+    execMessageArray(uid) = new ExecMessage(uid, false)
+
+    val planMessage = new PlanMessage(uid, baseQuery = true)
+    planMessage.setSubQInfo(queryInfo(uid))
+    writePlanMessage(outputStream, planMessage)
+  }
+
   def startOneExecution(uid: Int): Unit = {
     outputStreamArray(uid).writeObject(execMessageArray(uid))
   }
@@ -71,6 +89,16 @@ class MetaServer (numSubQ: Int, port: Int) {
 
   def getStatMessage(uid: Int): StatMessage = {
     inputStreamArray(uid).readObject().asInstanceOf[StatMessage]
+  }
+
+  def stopOneQuery(uid: Int): Unit = {
+    inputStreamArray(uid).close()
+    outputStreamArray(uid).close()
+    socketArray(uid).close()
+  }
+
+  def stopServerSocket(): Unit = {
+    ss.close()
   }
 
   def stopServer(): Unit = {

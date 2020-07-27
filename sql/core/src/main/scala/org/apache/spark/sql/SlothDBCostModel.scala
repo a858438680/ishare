@@ -1611,8 +1611,14 @@ class SlothOffset(val name: String,
       val offset = offsetWithIndex._1
       val i = offsetWithIndex._2
       val newOffset =
-        if (batchNum == batchIndex) offset
-        else ((offset + batchNum - 1)/batchNum) * (batchIndex)
+        if (batchNum == batchIndex) {
+          offset
+        } else {
+          var tmpOffset = ((offset + batchNum - 1) / batchNum) * (batchIndex)
+          if (tmpOffset == 1) tmpOffset += 1
+          tmpOffset = math.min(tmpOffset, offset)
+          tmpOffset
+        }
       newOffsets.append(newOffset)
       newIndices.append(partIndices(i))
     })

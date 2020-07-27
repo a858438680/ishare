@@ -140,10 +140,10 @@ class TestSQP (bootstrap: String, shuffleNum: String, statDIR: String, SF: Doubl
     .set(SQLConf.SQP_SOURCE_PARTITION.key, inputPartitions.toString)
     .set("spark.scheduler.mode", "FAIR")
 
-  private val sparkSession = SparkSession.builder()
-    .config(sparkConf)
-    .appName("Shared Query Execution")
-    .getOrCreate()
+  // private val sparkSession = SparkSession.builder()
+  //   .config(sparkConf)
+  //   .appName("Shared Query Execution")
+  //   .getOrCreate()
 
   private val largeDataset = false
   private val numSubQ = subQueries.length
@@ -166,12 +166,12 @@ class TestSQP (bootstrap: String, shuffleNum: String, statDIR: String, SF: Doubl
     val subQuery = pair._1
     val idx = pair._2
     subQuery.initialize(queryNames(idx), idx.toString, numBatches(idx).toString,
-      constraints(idx), SF, tpchSchemas(idx), sparkSession)
+      constraints(idx), SF, tpchSchemas(idx))
   })
 
   private val serverThread =
     new ServerThread(numSubQ, port, queryNames, numBatches, schedulingOrder,
-      queryDependency, subQueryInfos, this)
+      queryDependency, subQueryInfos, subQueries, sparkConf, this)
 
   private def createSharedTopics(): Unit = {
     shareTopics.foreach(shareTopic => {
@@ -209,10 +209,10 @@ class TestSQP (bootstrap: String, shuffleNum: String, statDIR: String, SF: Doubl
       createSharedTopics()
     }
 
-    subQueries.foreach(_.start())
+    // subQueries.foreach(_.start())
     serverThread.start()
 
-    subQueries.foreach(_.join())
+    // subQueries.foreach(_.join())
     serverThread.join()
     serverThread.reportStats()
 
@@ -245,6 +245,8 @@ class ServerThread (numSubQ: Int, port: Int,
                     uidOrder: Array[Int],
                     dependency: mutable.HashMap[Int, mutable.HashSet[Int]],
                     queryInfo: Array[SubQueryInfo],
+                    subqueries: Array[TPCHQuery],
+                    sparkConf: SparkConf,
                     driver: TestSQP) extends Thread {
 
   private val server = new MetaServer(numSubQ, port)
@@ -253,59 +255,70 @@ class ServerThread (numSubQ: Int, port: Int,
   private val finalTime = new Array[Double](numSubQ)
   private val initialStartupTime = 4000.0
   private val maxBatchNum = Catalog.getMaxBatchNum
+
+  private val batchNumForScheduling = Array.fill[Int](numBatchArray.length)(1)
   private val progressSimulator =
-    new ProgressSimulator(maxBatchNum, numBatchArray, dependency)
+    new ProgressSimulator(maxBatchNum, batchNumForScheduling, dependency)
 
   server.loadSharedQueryInfo(queryInfo)
 
-  private var firstRun = true
-
   override def run(): Unit = {
-    server.startServer()
 
-    val finishedSet = new mutable.HashSet[Int]()
+    var setArray: Array[mutable.HashSet[Int]] = null
     var curStep = 0
-    while (curStep < maxBatchNum) {
-
+    while (curStep != maxBatchNum) {
       val pair = progressSimulator.nextStep()
       curStep = pair._1
-      val setArray = pair._2
+      setArray = pair._2
+    }
 
-      setArray.foreach(execSet => {
-        execSet.foreach(uid => {
+    // This is the order for scheduling sub-queries
+    // Each subquery uses its own SparkSession
+    setArray.foreach(execSet => {
+      execSet.foreach(uid => {
+
+        val sparkSession = SparkSession.builder()
+          .config(sparkConf)
+          .appName("Shared Query Execution")
+          .getOrCreate()
+        subqueries(uid).setSparkSession(sparkSession)
+        subqueries(uid).start()
+        server.startOneQuery()
+
+        for (curStep <- 0 until numBatchArray(uid)) {
           server.startOneExecution(uid)
           val msg = server.getStatMessage(uid)
           // clean up here
           if (msg.batchID == -1) {
             println("Caught an exception, start shutting down the program")
-            for (tmpId <- 0 until numSubQ) {
-              if (!finishedSet.contains(tmpId)) {
-                server.terminateQuery(tmpId)
-              }
-            }
-            server.stopServer()
+            server.terminateQuery(uid)
+            server.stopOneQuery(uid)
+            server.stopServerSocket()
             driver.failCleanup()
             System.exit(1)
           }
           val execTime =
-            if (firstRun) {
-              firstRun = false
+            if (curStep == 0) {
               msg.execTime - initialStartupTime
             } else {
               msg.execTime
             }
           totalTime(uid) += execTime
           allTotalTime += execTime
-          if (curStep == maxBatchNum) {
-            finishedSet.add(uid)
+          if (curStep == (numBatchArray(uid) - 1)) {
             finalTime(uid) = execTime
           }
-        })
+        }
+
+        server.stopOneQuery(uid)
+        Thread.sleep(2000)
+        sparkSession.stop()
+        Thread.sleep(2000)
+
       })
+    })
 
-    }
-
-    server.stopServer()
+    server.stopServerSocket()
   }
 
   def reportStats(): Unit = {
