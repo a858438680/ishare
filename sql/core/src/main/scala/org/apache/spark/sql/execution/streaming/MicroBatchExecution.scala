@@ -317,21 +317,22 @@ class MicroBatchExecution(
         // Otherwise, there was no data to execute the batch and sleep for some time
         if (enable_slothdb) {
           currentBatchId += 1
-           if (isCurrentBatchConstructed) {
+          if (isCurrentBatchConstructed) {
             isCurrentBatchConstructed = false
+          } else {
+            lastTimeSec = 0.0
           }
+
+          val statMsg = new StatMessage(uid)
+          statMsg.batchID = currentBatchId.toInt
+          statMsg.execTime = lastTimeSec
+          client.reportStatMessage(statMsg)
+
         } else {
           if (isCurrentBatchConstructed) {
             currentBatchId += 1
             isCurrentBatchConstructed = false
           } else Thread.sleep(pollingDelayMs)
-        }
-
-        if (enable_slothdb) {
-          val statMsg = new StatMessage(uid)
-          statMsg.batchID = currentBatchId.toInt
-          statMsg.execTime = lastTimeSec
-          client.reportStatMessage(statMsg)
         }
 
         if (enable_slothdb && currentBatchId == numBatch) {
