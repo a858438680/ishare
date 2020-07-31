@@ -13,19 +13,21 @@ CORE_JAR=$WORK_DIR/core/target/scala-2.11/spark-core_2.11-2.4.0.jar
 
 #REMOTE=lincoln.cs.uchicago.edu
 REMOTE=southport.cs.uchicago.edu
-REMOTE_SPARK=$REMOTE:/tank/hdfs/totem/slothdb/spark
+REMOTE_SPARK=$REMOTE:/tank/hdfs/sqp/spark
 
 #REMOTE=grace.cs.uchicago.edu
 #REMOTE_SPARK=$REMOTE:/mnt/hdd-2T-1/totem/spark/
 
 #scp $TPCH_JAR $SQL_JAR $EXAMPLE_JAR $REMOTE_SPARK/jars/
-scp $TPCH_JAR $REMOTE_SPARK/jars/
+#scp $TPCH_JAR $REMOTE_SPARK/jars/
 #scp $CAT_JAR $REMOTE_SPARK/jars/
-scp $SQL_JAR $REMOTE_SPARK/jars/
+#scp $SQL_JAR $REMOTE_SPARK/jars/
 #scp $TPCH_JAR $REMOTE_SPARK/jars/
 #scp $TPCH_JAR $SQL_JAR $REMOTE_SPARK/jars/
 #scp $CAT_JAR $REMOTE_SPARK/jars/
 #scp $CORE_JAR $REMOTE_SPARK/jars/
 
 #scp -r metadata/* $REMOTE_SPARK/metadata/
+
+scp $TPCH_JAR $SQL_JAR $CAT_JAR $AVRO_JAR $KAFKA_JAR $CORE_JAR $REMOTE_SPARK/jars/
 
