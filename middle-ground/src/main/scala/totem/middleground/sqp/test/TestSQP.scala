@@ -18,8 +18,9 @@
 // scalastyle:off println
 package totem.middleground.sqp.test
 
+import java.io.{FileWriter, PrintWriter}
+
 import scala.collection.mutable
-import scala.collection.mutable.ArrayBuffer
 import scala.sys.process._
 
 import totem.middleground.sqp._
@@ -31,7 +32,6 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sqpmeta.SubQueryInfo
 import org.apache.spark.sql.sqpnetwork.MetaServer
-
 
 object TestSQP {
 
@@ -214,7 +214,7 @@ class TestSQP (bootstrap: String, shuffleNum: String, statDIR: String, SF: Doubl
 
     // subQueries.foreach(_.join())
     serverThread.join()
-    serverThread.reportStats()
+    serverThread.reportStats(statDIR, executionMode)
 
     if (executionMode != ExecutionMode.NoShare) {
       deleteSharedTopics()
@@ -321,7 +321,7 @@ class ServerThread (numSubQ: Int, port: Int,
     server.stopServerSocket()
   }
 
-  def reportStats(): Unit = {
+  def reportStats(statDir: String, executionMode: ExecutionMode.Value): Unit = {
     for (uid <- 0 until numSubQ) {
       println(s"${qnames(uid)}, batchNum ${numBatchArray(uid)}")
       printf("total time\tfinal time\n")
@@ -332,47 +332,104 @@ class ServerThread (numSubQ: Int, port: Int,
     val rootQueries = uidOrder
     val uidQueue = mutable.Queue.empty[Int]
     rootQueries.foreach(uidQueue.enqueue(_))
-    val latencyMap = latencyWithOrder(uidQueue)
+    val latencyMap = Utils.latencyWithOrder(uidQueue, finalTime, dependency)
     rootQueries.foreach(uid => {
       val latency = latencyMap(uid)
       println(s"Q${getRawQueryName(qnames(uid))}\t$latency")
     })
+
+    val timestamp = Utils.getCurTimeStamp()
+
+    // Write stats into files
+    writeSubqueryInfo(statDir, executionMode, timestamp)
+    writeLatencyInfo(statDir, executionMode, timestamp, rootQueries, latencyMap)
+    writeAggInfo(statDir, executionMode, timestamp)
+  }
+
+  private def writeSubqueryInfo(statDir: String,
+                                executionMode: ExecutionMode.Value,
+                                timestamp: String): Unit = {
+    // Write standalone latency for each subquery
+    val subQueryFile = statDir + "/subquery.stat"
+    val subQueryWriter = new PrintWriter(new FileWriter(subQueryFile, true))
+    for (uid <- 0 until numSubQ) {
+      subQueryWriter.println(s"${timestamp}\t${executionMode}\t${uid}\t${qnames(uid)}\t" +
+        s"${numBatchArray(uid)}\t${totalTime(uid)}\t${finalTime(uid)}")
+    }
+    subQueryWriter.print("\n")
+    subQueryWriter.close()
+
+    // Write subquery dependency
+    val depFile = statDir + "/dependency.stat"
+    val depWriter = new PrintWriter(new FileWriter(depFile, true))
+    for (uid <- 0 until numSubQ) {
+      val depUids = dependency(uid).toArray
+      val depStr = uidArrayToString(depUids)
+      depWriter.println(s"${timestamp}\t${executionMode}\t${uid}\t${depStr}")
+    }
+    depWriter.print("\n")
+    depWriter.close()
+  }
+
+  private def uidArrayToString(depUids: Array[Int]): String = {
+    val stringBuffer = new StringBuffer()
+    depUids.zipWithIndex.foreach(pair => {
+      val uid = pair._1
+      val idx = pair._2
+      if (idx < depUids.length - 1) stringBuffer.append(uid + ",")
+      else stringBuffer.append(uid)
+    })
+    stringBuffer.toString
+  }
+
+  private def writeLatencyInfo(statDir: String,
+                               executionMode: ExecutionMode.Value,
+                               timestamp: String,
+                               rootQueries: Array[Int],
+                               latencyMap: mutable.HashMap[Int, Double]): Unit = {
+    // write stacked latency
+    val stackFile = statDir + "/stack.stat"
+    val stackWriter = new PrintWriter(new FileWriter(stackFile, true))
+    rootQueries.foreach(uid => {
+      val latency = latencyMap(uid)
+      stackWriter.println(s"${timestamp}\t$executionMode\t" +
+        s"${getRawQueryName(qnames(uid))}\t$latency")
+    })
+    stackWriter.print("\n")
+    stackWriter.close()
+
+    val standaloneFile = statDir + "/standalone.stat"
+    val standaloneWriter = new PrintWriter(new FileWriter(standaloneFile, true))
+    var prevUid = -1
+    rootQueries.foreach(uid => {
+      val latency = latencyMap(uid)
+      val aloneLatency =
+        if (prevUid == -1) latency
+        else {
+          val prevLatency = latencyMap(prevUid)
+          latency - prevLatency
+        }
+      prevUid = uid
+      standaloneWriter.println(s"${timestamp}\t$executionMode\t" +
+        s"${getRawQueryName(qnames(uid))}\t$aloneLatency")
+    })
+
+    standaloneWriter.print("\n")
+    standaloneWriter.close()
+  }
+
+  private def writeAggInfo(statDir: String,
+                           executionMode: ExecutionMode.Value,
+                           timestamp: String): Unit = {
+    val aggFile = statDir + "/total.stat"
+    val aggWriter = new PrintWriter(new FileWriter(aggFile, true))
+    aggWriter.println(s"${timestamp}\t$executionMode\t$allTotalTime")
+    aggWriter.close()
   }
 
   private def getRawQueryName(queryName: String): String = {
     val idx = queryName.indexOf("_")
     queryName.substring(idx + 1)
-  }
-
-  private def latencyWithOrder(uidQueue: mutable.Queue[Int]): mutable.HashMap[Int, Double] = {
-    var curLatency = 0.0
-    val latencyMap = mutable.HashMap.empty[Int, Double]
-
-    val finished = mutable.HashSet.empty[Int]
-    while (uidQueue.nonEmpty) {
-      val curUid = uidQueue.dequeue()
-      val latency = getLatency(curUid, finished)
-      curLatency += latency
-      latencyMap.put(curUid, curLatency)
-    }
-
-    latencyMap
-  }
-
-  private def getLatency(uid: Int, finished: mutable.HashSet[Int]): Double = {
-    if (finished.contains(uid)) {
-      0.0
-    } else {
-      finished.add(uid)
-
-      finalTime(uid) +
-        dependency(uid).map(childUid => {
-          getLatency(childUid, finished)
-        }).foldRight(0.0)((A, B) => {
-          A + B
-        })
-
-    }
   }
 
   private def simulateLatency(): mutable.HashMap[Int, Double] = {

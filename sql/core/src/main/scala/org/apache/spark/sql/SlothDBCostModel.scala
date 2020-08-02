@@ -1604,6 +1604,8 @@ class SlothOffset(val name: String,
                   val partIndices: Array[Int],
                   val partOffsets: Array[Long]) {
 
+  private val LEASTOFFSET = 50
+
   def getOffsetByIndex(batchNum: Int, batchIndex: Int): SlothOffset = {
     val newIndices = new ArrayBuffer[Int]()
     val newOffsets = new ArrayBuffer[Long]()
@@ -1615,7 +1617,9 @@ class SlothOffset(val name: String,
           offset
         } else {
           var tmpOffset = ((offset + batchNum - 1) / batchNum) * (batchIndex)
-          if (tmpOffset == 1) tmpOffset += 1
+          if (tmpOffset < (LEASTOFFSET / partOffsets.length)) {
+            tmpOffset = (LEASTOFFSET / partOffsets.length)
+          }
           tmpOffset = math.min(tmpOffset, offset)
           tmpOffset
         }

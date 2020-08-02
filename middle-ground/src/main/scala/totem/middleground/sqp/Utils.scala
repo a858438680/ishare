@@ -19,6 +19,9 @@
 
 package totem.middleground.sqp
 
+import java.text.SimpleDateFormat
+import java.util.Calendar
+
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.io.Source
@@ -220,6 +223,48 @@ object Utils {
     })
     strBuf.append("]")
     strBuf.toString
+  }
+
+  def getCurTimeStamp(): String = {
+    val form = new SimpleDateFormat("MM-dd-HH:mm:ss")
+    val c = Calendar.getInstance()
+    form.format(c.getTime())
+  }
+
+  def latencyWithOrder(uidQueue: mutable.Queue[Int],
+                       latencyArray: Array[Double],
+                       uidDependency: mutable.HashMap[Int, mutable.HashSet[Int]])
+  : mutable.HashMap[Int, Double] = {
+    var curLatency = 0.0
+    val latencyMap = mutable.HashMap.empty[Int, Double]
+
+    val finished = mutable.HashSet.empty[Int]
+    while (uidQueue.nonEmpty) {
+      val curUid = uidQueue.dequeue()
+      val latency = getLatency(curUid, finished, latencyArray, uidDependency)
+      curLatency += latency
+      latencyMap.put(curUid, curLatency)
+    }
+
+    latencyMap
+  }
+
+  private def getLatency(uid: Int, finished: mutable.HashSet[Int],
+                         latencyArray: Array[Double],
+                         uidDependency: mutable.HashMap[Int, mutable.HashSet[Int]]): Double = {
+    if (finished.contains(uid)) {
+      0.0
+    } else {
+      finished.add(uid)
+
+      latencyArray(uid) +
+        uidDependency(uid).map(childUid => {
+          getLatency(childUid, finished, latencyArray, uidDependency)
+        }).foldRight(0.0)((A, B) => {
+          A + B
+        })
+
+    }
   }
 
 }

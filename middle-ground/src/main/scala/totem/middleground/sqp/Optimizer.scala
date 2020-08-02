@@ -41,56 +41,61 @@ object Optimizer {
   }
 
   def OptimizeUsingSQP(queryGraph: QueryGraph): QueryGraph = {
-
-    val batchFinalWork = mutable.HashMap.empty[Int, Double]
-    queryGraph.qidToQuery.foreach(pair => {
-      val qid = pair._1
-      val query = pair._2
-      batchFinalWork.put(qid, getBatchFinalWork(query))
-    })
-
-    queryGraph.fullQidSet.foreach(qid => {
-      val newQuery = OptimizeOneQuery(queryGraph.qidToQuery(qid))
-      queryGraph.qidToQuery.put(qid, newQuery)
-    })
-
-    UnshareMQO(ConventionalMQO(queryGraph))
-
     val nonUniform = true
-    decideExecutionPace(findSubQueries(queryGraph), batchFinalWork, nonUniform)
+    val batchFinalWork = getAllBatchFinalWork(queryGraph)
+    val queryGraphWithMQO = batchMQO(queryGraph)
+    val queryGraphWithUnshare = UnshareMQO(queryGraphWithMQO)
+    val queryGraphWithSubquries = findSubQueries(queryGraphWithUnshare)
+    decideExecutionPace(queryGraphWithSubquries, batchFinalWork, nonUniform)
   }
 
   def OptimizeUsingBatchMQO(queryGraph: QueryGraph): QueryGraph = {
+    val nonUniform = false
+    val batchFinalWork = getAllBatchFinalWork(queryGraph)
+    val queryGraphWithSubqueries = findSubQueries(batchMQO(queryGraph))
+    decideExecutionPace(queryGraphWithSubqueries, batchFinalWork, nonUniform)
+  }
 
-    val batchFinalWork = mutable.HashMap.empty[Int, Double]
-    queryGraph.qidToQuery.foreach(pair => {
-      val qid = pair._1
-      val query = pair._2
-      batchFinalWork.put(qid, getBatchFinalWork(query))
-    })
+  def OptimizedWithoutSharing(queryGraph: QueryGraph): QueryGraph = {
+    val nonUniform = false
+    val batchFinalWork = getAllBatchFinalWork(queryGraph)
+    val queryGraphWithSubqueries = findSubQueries(queryGraph)
+    decideExecutionPace(queryGraphWithSubqueries, batchFinalWork, nonUniform)
+  }
 
+  def testOptimizerWithSQP(queryGraph: QueryGraph): (Double, Double) = {
+    (0.0, 0.0)
+  }
+
+  def testOptimizerWithBatchMQO(queryGraph: QueryGraph): Double = {
+    val nonUniform = false
+    val batchFinalWork = getAllBatchFinalWork(queryGraph)
+    val queryGraphWithSubqueries = findSubQueries(batchMQO(queryGraph))
+
+    val start = System.nanoTime()
+    decideExecutionPace(queryGraphWithSubqueries, batchFinalWork, nonUniform)
+    val optTime = (System.nanoTime() - start)/1000000
+    optTime
+  }
+
+  def testOptimizerWithoutSharing(queryGraph: QueryGraph): Double = {
+    val nonUniform = false
+    val batchFinalWork = getAllBatchFinalWork(queryGraph)
+    val queryGraphWithSubqueries = findSubQueries(queryGraph)
+
+    val start = System.nanoTime()
+    decideExecutionPace(queryGraphWithSubqueries, batchFinalWork, nonUniform)
+    val optTime = (System.nanoTime() - start)/1000000
+    optTime
+  }
+
+  private def batchMQO(queryGraph: QueryGraph): QueryGraph = {
     queryGraph.fullQidSet.foreach(qid => {
       val newQuery = OptimizeOneQuery(queryGraph.qidToQuery(qid))
       queryGraph.qidToQuery.put(qid, newQuery)
     })
 
     ConventionalMQO(queryGraph)
-
-    val nonUniform = false
-    decideExecutionPace(findSubQueries(queryGraph), batchFinalWork, nonUniform)
-  }
-
-  def OptimizedWithoutSharing(queryGraph: QueryGraph): QueryGraph = {
-
-    val batchFinalWork = mutable.HashMap.empty[Int, Double]
-    queryGraph.qidToQuery.foreach(pair => {
-      val qid = pair._1
-      val query = pair._2
-      batchFinalWork.put(qid, getBatchFinalWork(query))
-    })
-
-    val nonUniform = false
-    decideExecutionPace(findSubQueries(queryGraph), batchFinalWork, nonUniform)
   }
 
   def OptimizeOneQuery(op: PlanOperator): PlanOperator = {
@@ -183,6 +188,17 @@ object Optimizer {
     QueryGraph(queryGraph.qidToQuery, queryGraph.qidToConstraints,
       queryGraph.fullQidSet, subQueries, qidToUids, uidtoQid,
       dependency, mutable.HashMap.empty[Int, Double], Array.empty[Int], Array.empty[Int])
+  }
+
+
+  def getAllBatchFinalWork(queryGraph: QueryGraph): mutable.HashMap[Int, Double] = {
+    val batchFinalWork = mutable.HashMap.empty[Int, Double]
+    queryGraph.qidToQuery.foreach(pair => {
+      val qid = pair._1
+      val query = pair._2
+      batchFinalWork.put(qid, getBatchFinalWork(query))
+    })
+    batchFinalWork
   }
 
   private def getBatchFinalWork(op: PlanOperator): Double = {
