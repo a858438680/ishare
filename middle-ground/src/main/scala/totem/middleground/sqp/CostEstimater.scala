@@ -841,6 +841,7 @@ object CostEstimater {
         optQidCluster.add(mutable.HashSet(37))
         curNodeSet.foreach(optNodeSet.add)
       } else if (curReducedTotalWork > 0.0) {
+      // if (curReducedTotalWork > 0.0) {
         curQidCluster.foreach(optQidCluster.add)
         curNodeSet.foreach(optNodeSet.add)
       }
@@ -964,6 +965,8 @@ object CostEstimater {
     }
   }
 
+  val groupOverhead = 1.0
+
   private def computeBenefitBetweenTwoGroups(qidGroupA: mutable.HashSet[Int],
               qidGroupB: mutable.HashSet[Int],
               rootNode: PlanOperator,
@@ -990,7 +993,7 @@ object CostEstimater {
           getConstraintForGroup(mergeGroup, constraint), cacheForBatchNum)
       })
 
-    totalWorkA + totalWorkB - totalWorkMerge
+    totalWorkA + totalWorkB - totalWorkMerge * groupOverhead
   }
 
   private def getConstraintForGroup(qidGroup: mutable.HashSet[Int],
@@ -1186,7 +1189,9 @@ object CostEstimater {
           }
 
           if (outerCostInfo.totalCost < 0.0) {
-            if (joinOP.outerBatchIdx == 0) getJoinCardMapFromQidGroup(joinOP, qidGroup)
+            if (joinOP.outerBatchIdx == 0 && innerCostInfo.totalCost >= 0.0) {
+              getJoinCardMapFromQidGroup(joinOP, qidGroup)
+            }
             outerCostInfo = scanLocalInput(joinOP, qidGroup,
               joinOP.outerBatchIdx, joinOP.outerCardMap, joinOP.outerDelCardMap, batchNum)
             joinOP.outerBatchIdx += 1
@@ -1292,6 +1297,8 @@ object CostEstimater {
     delCardMap.put(ROOTQID, math.min(curTotalDelCard, newTotalDelCard))
   }
 
+  val deleteFactor = 1.0
+
   private def getJoinCardMapFromQidGroup(joinOP: JoinOperator,
                                          qidGroup: mutable.HashSet[Int]): Unit = {
 
@@ -1299,6 +1306,15 @@ object CostEstimater {
     val innerDelCardMap = joinOP.innerDelCardMap
     val outerCardMap = joinOP.outerCardMap
     val outerDelCardMap = joinOP.outerDelCardMap
+
+    val realDeleteFactor =
+      if (qidGroup.size > 1 &&
+        ({qidGroup.exists(qid => {joinOP.getInnerInputCard(qid)._2 > 0})}
+          || qidGroup.exists(qid => {joinOP.getOuterInputCard(qid)._2 > 0}))) {
+        deleteFactor
+      } else {
+        1.0
+      }
 
     // Update CardMap
     var newInnerTotalCard = 0.0
@@ -1308,16 +1324,16 @@ object CostEstimater {
 
     qidGroup.foreach(qid => {
       val innerCardPair = joinOP.getInnerInputCard(qid)
-      innerCardMap.put(qid, innerCardPair._1)
-      innerDelCardMap.put(qid, innerCardPair._2)
-      newInnerTotalCard += innerCardPair._1
-      newInnerTotalDelCard += innerCardPair._2
+      innerCardMap.put(qid, innerCardPair._1 * realDeleteFactor)
+      innerDelCardMap.put(qid, innerCardPair._2 * realDeleteFactor)
+      newInnerTotalCard += innerCardPair._1 * realDeleteFactor
+      newInnerTotalDelCard += innerCardPair._2 * realDeleteFactor
 
       val outerCardPair = joinOP.getOuterInputCard(qid)
-      outerCardMap.put(qid, outerCardPair._1)
-      outerDelCardMap.put(qid, outerCardPair._2)
-      newOuterTotalCard += outerCardPair._1
-      newOuterTotalDelCard += outerCardPair._2
+      outerCardMap.put(qid, outerCardPair._1 * realDeleteFactor)
+      outerDelCardMap.put(qid, outerCardPair._2 * realDeleteFactor)
+      newOuterTotalCard += outerCardPair._1 * realDeleteFactor
+      newOuterTotalDelCard += outerCardPair._2 * realDeleteFactor
     })
 
     val innerTotalCardPair = joinOP.getInnerInputCard(ROOTQID)
