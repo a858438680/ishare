@@ -1,14 +1,23 @@
 l_shipdate <= "1998-09-01"			            :0.99
 l_shipdate between ("1994-01-01", "1994-06-31")	:0.08
+l_shipdate between ("1994-04-01", "1994-09-31")	:0.08
 l_shipdate between ("1995-01-01", "1995-04-01")	:0.037
+l_shipdate between ("1995-02-01", "1995-05-01")	:0.037
 l_shipdate between ("1994-09-01", "1994-10-01")	:0.012
+l_shipdate between ("1994-09-15", "1994-10-15")	:0.012
 l_shipdate between ("1995-01-01", "1995-06-31")	:0.08
+l_shipdate between ("1994-10-01", "1995-03-31")	:0.08
 l_shipdate between ("1994-01-01", "1995-01-01")	:0.15
 l_shipdate between ("1994-02-01", "1994-10-01") :0.08
 l_receiptdate === "1994-01-01"			        :0.0004
+l_receiptdate === "1994-02-01"			        :0.0004
 l_shipdate > "1998-03-15"			            :0.06
+l_shipdate between ("1997-12-15", "1998-06-15") :0.08
 l_discount between (0.05, 0.07)			        :0.18
+l_discount between (0.04, 0.06)			        :0.18
 l_shipdate between ("1994-07-01", "1994-10-01") :0.038
+l_shipdate between ("1994-04-01", "1994-07-01") :0.038
+l_shipdate between ("1994-08-15", "1994-11-15") :0.038
 l_receiptdate > l_commitdate			        :0.63
 l_shipdate < l_commitdate			            :0.49
 l_returnflag === "R"				            :0.25
@@ -18,27 +27,37 @@ l_shipmode isin ("AIR", "AIR REG")		        :0.15
 l_shipinstruct === "DELIVER IN PERSON"		    :0.25
 
 p_size === 15					            :0.02
+p_size === 16					            :0.02
 p_type like ("%BRASS")				        :0.2
 p_name like ("forest%")				        :0.05
 p_brand === "Brand#23"				        :0.04
+p_brand === "Brand#24"				        :0.04
 p_container === "MED BOX"			        :0.025
 p_brand =!= "Brand#45"				        :0.96
 p_size isin (49, 15, 9)	                    :0.06
+p_size isin (15, 9, 6)	                    :0.06
 p_name like ("%green%")				        :0.05
+p_name like ("%gray%")				        :0.05
 p_type === "ECONOMY ANODIZED STEEL"		    :0.007
 
 
 o_orderdate < "1992-03-15"				:0.03
 o_orderstatus === "F"					:0.49
 o_orderdate between ("1994-05-01", "1994-10-01")	:0.05
+o_orderdate between ("1994-02-01", "1994-07-01")	:0.05
 o_orderdate between ("1994-01-01", "1994-09-31")	:0.11
 o_orderdate between ("1994-01-01", "1994-09-01")	:0.1
+o_orderdate between ("1993-09-01", "1994-05-01")	:0.1
+o_orderdate between ("1993-09-01", "1994-05-01")	:0.1
 o_orderdate between ("1993-07-01", "1993-10-01")	:0.038
+o_orderdate between ("1993-08-15", "1993-11-15")	:0.038
 o_orderdate between ("1994-01-01", "1994-08-31")    :0.1
 
 
 c_mktsegment === "BUILDING"							:0.2
+c_mktsegment === "AUTOMOBILE"						:0.2
 substring($"c_phone", 1, 2) isin ("13", "31")	    :0.08
+substring($"c_phone", 1, 2) isin ("14", "31")	    :0.08
 c_acctbal > 0.0								:0.9
 
 n_name === "GERMANY"			:0.04

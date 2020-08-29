@@ -23,6 +23,8 @@ import scala.collection.immutable.HashSet
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
+import totem.middleground.sqp.CostEstimater.{CachedCostInfo, SubQueryCacheManager}
+
 object SubsumeState extends Enumeration {
   type SubsumeState = Value
 
@@ -36,17 +38,25 @@ object Optimizer {
 
   val dummyOperator = genDummyOperator()
 
+  val finalWorkRatio = 1.0
+
   def initializeOptimizer(predFile: String): Unit = {
     Catalog.initCatalog(predFile)
   }
 
-  def OptimizeUsingSQP(queryGraph: QueryGraph): QueryGraph = {
+  def OptimizeUsingSQP(queryGraph: QueryGraph, enableUnshare: Boolean):
+  QueryGraph = {
     val nonUniform = true
     val batchFinalWork = getAllBatchFinalWork(queryGraph)
-    val queryGraphWithMQO = batchMQO(queryGraph)
-    val queryGraphWithUnshare = UnshareMQO(queryGraphWithMQO)
-    val queryGraphWithSubquries = findSubQueries(queryGraphWithUnshare)
-    decideExecutionPace(queryGraphWithSubquries, batchFinalWork, nonUniform)
+    val queryGraphWithPerOPFinalWork = getPerOPFinalWork(queryGraph, batchFinalWork)
+    val queryGraphWithMQO = batchMQO(queryGraphWithPerOPFinalWork)
+    val queryGraphWithSubqueries = findSubQueries(queryGraphWithMQO)
+    val queryGraphWithPace =
+      decideExecutionPace(queryGraphWithSubqueries, batchFinalWork, nonUniform)
+    if (enableUnshare) {
+      UnshareMQO(queryGraphWithPace, batchFinalWork)
+    }
+    else queryGraphWithPace
   }
 
   def OptimizeUsingBatchMQO(queryGraph: QueryGraph): QueryGraph = {
@@ -196,27 +206,65 @@ object Optimizer {
     queryGraph.qidToQuery.foreach(pair => {
       val qid = pair._1
       val query = pair._2
-      batchFinalWork.put(qid, getBatchFinalWork(query))
+      batchFinalWork.put(qid, getBatchFinalWork(query) * finalWorkRatio)
     })
     batchFinalWork
+  }
+
+  def getPerOPFinalWork(queryGraph: QueryGraph,
+                        batchFinalWork: mutable.HashMap[Int, Double]): QueryGraph = {
+    val graphWithSubQueries = findSubQueries(queryGraph)
+    val graphWithBatchNum = decideUniformPace(graphWithSubQueries, batchFinalWork)
+    graphWithBatchNum.numBatches.zipWithIndex.foreach(pair => {
+      val batchNum = pair._1
+      val uid = pair._2
+      val query = graphWithBatchNum.subQueries(uid)
+
+      val subQueries = Array(query)
+      val batchNums = Array(batchNum)
+      val queryDependency = mutable.HashMap(0 -> mutable.HashSet.empty[Int])
+      val execOrder = Array(0)
+      val cacheManagers = Array(SubQueryCacheManager(0, null, null, false))
+      val collectPerOPFinalWork = true
+      val collectPerOPCardMap = false
+      CostEstimater.estimatePlanGraphCost(subQueries, cacheManagers, batchNums,
+        execOrder, queryDependency, collectPerOPFinalWork, collectPerOPCardMap)
+    })
+
+    graphWithBatchNum
   }
 
   private def getBatchFinalWork(op: PlanOperator): Double = {
     val subQueries = Array(op)
     val batchNums = Array(1)
     val queryDependency = mutable.HashMap(0 -> mutable.HashSet.empty[Int])
-    CostEstimater.estimatePlanGraphCost(subQueries, batchNums, queryDependency)._1
+    val execOrder = Array(0)
+    val cacheManagers = Array(SubQueryCacheManager(0, null, null, false))
+    val collectPerOPFinalWork = false
+    val collectPerOPCardMap = false
+    CostEstimater.estimatePlanGraphCost(subQueries, cacheManagers,
+      batchNums, execOrder, queryDependency, collectPerOPFinalWork, collectPerOPCardMap)._1
   }
 
   private def decideExecutionPace(queryGraph: QueryGraph,
                                   batchFinalWork: mutable.HashMap[Int, Double],
                                   nonUniform: Boolean): QueryGraph = {
-    if (nonUniform) {
-      System.err.println("Not Supported Nonuniform pace yet")
-      System.exit(1)
-    }
+    var totalTime: Long = 0L
 
-    decideUniformPace(queryGraph, batchFinalWork)
+    val start = System.nanoTime()
+
+    val retQueryGraph =
+      if (nonUniform) {
+        decideNonUniformPace(queryGraph, batchFinalWork, new Array[Int](0))
+      } else {
+        decideUniformPace(queryGraph, batchFinalWork)
+      }
+
+    totalTime += (System.nanoTime() - start)/1000000
+
+    println(s"Decide Execution Pace Time: ${totalTime}ms")
+
+    retQueryGraph
   }
 
   private def decideUniformPace(queryGraph: QueryGraph,
@@ -235,6 +283,12 @@ object Optimizer {
     val finalBatchNums = new Array[Int](numSubQ)
     val newBatchNums = new Array[Int](numSubQ)
     val cluster = genClusters(queryGraph.fullQidSet, qidToUids)
+    val execOrder = fromQueryDepToExecOrder(queryDependency, numSubQ)
+    val cacheManagers = new Array[SubQueryCacheManager](numSubQ)
+    for (uid <- 0 until numSubQ) cacheManagers(uid) = SubQueryCacheManager(uid, null, null, false)
+
+    val collectPerOPFinalWork = false
+    val collectPerOPCardMap = false
 
     cluster.foreach(qidCluster => {
       for (idx <- 0 until numSubQ) newBatchNums(idx) = 0
@@ -249,7 +303,8 @@ object Optimizer {
         })
 
         val (_, finalWork) =
-          CostEstimater.estimatePlanGraphCost(subQueries, newBatchNums, queryDependency)
+          CostEstimater.estimatePlanGraphCost(subQueries, cacheManagers,
+            newBatchNums, execOrder, queryDependency, collectPerOPFinalWork, collectPerOPCardMap)
         val qidToFinalWork =
           CostEstimater.buildQidFinalWork(qidToUids, finalWork)
 
@@ -260,7 +315,7 @@ object Optimizer {
             curFinalWork > finalWorkConstraints(qid)
           })
 
-        curBatchNum -= 1
+        if (meetConstraint) curBatchNum -= 1
       }
 
       curBatchNum = math.min(maxBatchNum, curBatchNum + 1)
@@ -287,6 +342,280 @@ object Optimizer {
     QueryGraph(queryGraph.qidToQuery, queryGraph.qidToConstraints, queryGraph.fullQidSet,
       queryGraph.subQueries, queryGraph.qidToUids, queryGraph.uidtoQid,
       queryGraph.queryDependency, finalWorkConstraints, uidOrderBuf.toArray, finalBatchNums)
+  }
+
+  private def decideNonUniformPace(queryGraph: QueryGraph,
+                                   batchFinalWork: mutable.HashMap[Int, Double],
+                                   cacheBatchNum: Array[Int]):
+  QueryGraph = {
+    val subQueries = queryGraph.subQueries
+    val numSubQ = subQueries.length
+    val qidToUids = queryGraph.qidToUids
+    val queryDependency = queryGraph.queryDependency
+    val finalWorkConstraints = mutable.HashMap.empty[Int, Double]
+    batchFinalWork.foreach(pair => {
+      val qid = pair._1
+      val batchWork = pair._2
+      finalWorkConstraints.put(qid, batchWork * queryGraph.qidToConstraints(qid))
+    })
+
+    val finalBatchNums = new Array[Int](numSubQ)
+    val cluster = genClusters(queryGraph.fullQidSet, qidToUids)
+
+    val parentDep = fromQueryDepToParentDep(queryDependency)
+    val execOrder = fromQueryDepToExecOrder(queryDependency, numSubQ)
+    val cacheManagers = new Array[SubQueryCacheManager](numSubQ)
+    for (uid <- 0 until numSubQ) {
+      val uidArray = findChildUidArray(uid, queryDependency)
+      val cacheMap = mutable.HashMap.empty[String, CachedCostInfo]
+      cacheManagers(uid) = SubQueryCacheManager(uid, uidArray, cacheMap, true)
+    }
+
+    val useCachedBatchnum = cacheBatchNum.length == numSubQ
+
+    cluster.foreach(qidCluster => {
+
+      var lastDecBatchUid = -1
+
+      val uidCluster = mutable.HashSet.empty[Int]
+      qidCluster.foreach(qid => {
+        qidToUids(qid).foreach(uidCluster.add)
+      })
+      val activeUidSet = mutable.HashSet.empty[Int]
+      uidCluster.foreach(activeUidSet.add)
+
+      val maxBatchNum = Catalog.getMaxBatchNum
+      var curBatchNum = new Array[Int](numSubQ)
+      for (uid <- 0 until numSubQ) {
+        if (uidCluster.contains(uid)) {
+          curBatchNum(uid) =
+            if (useCachedBatchnum) cacheBatchNum(uid)
+            else maxBatchNum
+        } else curBatchNum(uid) = 0
+      }
+
+      val collectPerOPFinalWork = false
+      val collectPerOPCardMap = false
+      var finish = false
+
+      while (!finish) {
+
+        val (_, finalWork) =
+          CostEstimater.estimatePlanGraphCost(subQueries, cacheManagers,
+            curBatchNum, execOrder, queryDependency, collectPerOPFinalWork, collectPerOPCardMap)
+        val qidToFinalWork =
+          CostEstimater.buildQidFinalWork(qidToUids, finalWork)
+
+        val existViolateConstrat =
+          qidToFinalWork.exists(pair => {
+            val qid = pair._1
+            val curFinalWork = pair._2
+            val violateConstraint = curFinalWork > finalWorkConstraints(qid)
+            if (violateConstraint && lastDecBatchUid == -1) { // First Try
+              qidToUids(qid).foreach(activeUidSet.remove)
+            }
+            violateConstraint
+          })
+
+        if (existViolateConstrat && lastDecBatchUid != -1) {
+          activeUidSet.remove(lastDecBatchUid)
+          curBatchNum(lastDecBatchUid) = curBatchNum(lastDecBatchUid) + 1
+          lastDecBatchUid = -1
+        }
+
+        if (activeUidSet.nonEmpty) {
+          val candSet = findUidCandidates(curBatchNum, uidCluster, parentDep)
+          val realCandSet = candSet.intersect(activeUidSet)
+          if (realCandSet.nonEmpty) {
+            val pair = decreaseBatchNum(curBatchNum, realCandSet,
+              subQueries, cacheManagers, execOrder, queryDependency)
+            curBatchNum = pair._1
+            lastDecBatchUid = pair._2
+          } else {
+            finish = true
+            lastDecBatchUid = -1
+          }
+        } else {
+          finish = true
+        }
+      }
+
+      uidCluster.foreach(uid => {
+        finalBatchNums(uid) =
+          if (uid == lastDecBatchUid) {
+            math.min(maxBatchNum, curBatchNum(uid) + 1)
+          } else {
+            curBatchNum(uid)
+          }
+      })
+
+    })
+
+    // Generate scheduling order
+    val qidOrder = finalWorkConstraints.toSeq.sortWith((pairA, pairB) => {
+      pairA._2 < pairB._2
+    }).map(_._1).toArray
+
+    val uidOrderBuf = new ArrayBuffer[Int]()
+    qidOrder.foreach(qid => {
+      subQueries.foreach(subQuery => {
+        if (subQuery.isInstanceOf[RootOperator] && subQuery.getQidSet(0) == qid) {
+          uidOrderBuf.append(subQuery.subQueryUID)
+        }
+      })
+    })
+
+    QueryGraph(queryGraph.qidToQuery, queryGraph.qidToConstraints, queryGraph.fullQidSet,
+      queryGraph.subQueries, queryGraph.qidToUids, queryGraph.uidtoQid,
+      queryGraph.queryDependency, finalWorkConstraints, uidOrderBuf.toArray, finalBatchNums)
+  }
+
+  private def findChildUidArray(uid: Int,
+                                queryDependency: mutable.HashMap[Int, mutable.HashSet[Int]]):
+  Array[Int] = {
+    val arrayBuf = new ArrayBuffer[Int]()
+    val queue = new mutable.Queue[Int]()
+    queue.enqueue(uid)
+    while (queue.nonEmpty) {
+      val curId = queue.dequeue()
+      arrayBuf.append(curId)
+      queryDependency(curId).foreach(queue.enqueue(_))
+    }
+    arrayBuf.toArray
+  }
+
+  private def findUidCandidates(curBatchNum: Array[Int],
+                                uidCluster: mutable.HashSet[Int],
+                                parentDependency: mutable.HashMap[Int, mutable.HashSet[Int]]):
+  mutable.HashSet[Int] = {
+
+    val candSet = mutable.HashSet.empty[Int]
+
+    uidCluster.foreach(uid => {
+      if (curBatchNum(uid) > 1) {
+        val deps = parentDependency(uid)
+        if (!deps.exists(parentUid => {
+          curBatchNum(parentUid) >= curBatchNum(uid)
+        })) {
+          candSet.add(uid)
+        }
+      }
+    })
+
+    candSet
+  }
+
+  private def fromQueryDepToExecOrder(queryDependency: mutable.HashMap[Int, mutable.HashSet[Int]],
+                                      numSubQ: Int):
+  Array[Int] = {
+    val candSet = mutable.HashSet.empty[Int]
+    for (uid <- 0 until numSubQ) candSet.add(uid)
+
+    val buf = new ArrayBuffer[mutable.HashSet[Int]]
+    while (candSet.nonEmpty) {
+      val tmpHashSet = new mutable.HashSet[Int]
+
+      candSet.foreach(uid => {
+        queryDependency.get(uid) match {
+          case None => tmpHashSet.add(uid)
+          case Some(depSet) =>
+            val leafNode =
+              !depSet.exists(depUID => {
+                candSet.contains(depUID)
+              })
+            if (leafNode) tmpHashSet.add(uid)
+        }
+      })
+
+      tmpHashSet.foreach(uid => {
+        candSet.remove(uid)
+      })
+
+      buf.append(tmpHashSet)
+    }
+
+    val uidBuf = new ArrayBuffer[Int]
+    buf.foreach(uidSet => {
+      uidSet.foreach(uidBuf.append(_))
+    })
+
+    uidBuf.toArray
+  }
+
+  private def fromQueryDepToParentDep(
+              queryDependency: mutable.HashMap[Int, mutable.HashSet[Int]]):
+  mutable.HashMap[Int, mutable.HashSet[Int]] = {
+    val parentDep = mutable.HashMap.empty[Int, mutable.HashSet[Int]]
+
+    queryDependency.foreach(pair => {
+      val parent = pair._1
+      val children = pair._2
+      if (!parentDep.contains(parent)) {
+        parentDep.put(parent, mutable.HashSet.empty[Int])
+      }
+
+      children.foreach(child => {
+        if (!parentDep.contains(child)) {
+          parentDep.put(child, mutable.HashSet.empty[Int])
+        }
+        val parentSet = parentDep(child)
+        parentSet.add(parent)
+      })
+    })
+
+    parentDep
+  }
+
+  private def decreaseBatchNum(curBatchNum: Array[Int],
+                               candUidSet: mutable.HashSet[Int],
+                               subQueries: Array[PlanOperator],
+                               cacheManagers: Array[SubQueryCacheManager],
+                               execOrder: Array[Int],
+                               queryDependency: mutable.HashMap[Int, mutable.HashSet[Int]]):
+  (Array[Int], Int) = {
+
+    val uidToDec =
+      candUidSet.map(uid => {
+        (uid, computeIncrementability(curBatchNum, uid, subQueries,
+          cacheManagers, execOrder, queryDependency))
+      }).foldRight((-1, Double.MaxValue))((A, B) => {
+        if (A._2 < B._2) A
+        else B
+      })._1
+
+    cacheManagers.foreach(_.clearCache())
+
+    curBatchNum(uidToDec) -= 1
+    (curBatchNum, uidToDec)
+  }
+
+  private def computeIncrementability(
+              curBatchNum: Array[Int], uid: Int,
+              subQueries: Array[PlanOperator],
+              cacheManagers: Array[SubQueryCacheManager],
+              execOrder: Array[Int],
+              queryDependency: mutable.HashMap[Int, mutable.HashSet[Int]]): Double = {
+    val collectPerOPFinalWork = false
+    val collectPerOPCardMap = false
+
+    val (oldTotalWork, oldFinalWork) =
+      CostEstimater.estimatePlanGraphCost(subQueries, cacheManagers,
+        curBatchNum, execOrder, queryDependency, collectPerOPFinalWork, collectPerOPCardMap)
+
+    curBatchNum(uid) -= 1
+    val (newTotalWork, newFinalWork) =
+      CostEstimater.estimatePlanGraphCost(subQueries, cacheManagers,
+        curBatchNum, execOrder, queryDependency, collectPerOPFinalWork, collectPerOPCardMap)
+    curBatchNum(uid) += 1
+
+    val totalDiff = oldTotalWork - newTotalWork
+    val finalDiff = oldFinalWork.zip(newFinalWork).map(pair => {
+      val oldOne = pair._1
+      val newOne = pair._2
+      newOne - oldOne
+    }).sum
+
+    finalDiff/totalDiff
   }
 
   private def genClusters(fullQidSet: mutable.HashSet[Int],
@@ -390,8 +719,278 @@ object Optimizer {
     queryGraph
   }
 
-  private def UnshareMQO(queryGraph: QueryGraph): QueryGraph = {
+  private def UnshareMQO(queryGraph: QueryGraph,
+                         batchFinalWork: mutable.HashMap[Int, Double]): QueryGraph = {
+    // Collect the perOP cardMap
+    var newQueryGraph = collectPerOPCardMap(queryGraph)
+    val candSubqueries = findUnShareCandidateSubQueries(newQueryGraph)
+
+    var unshareEstimationTime: Long = 0L
+    var unsharePhysicalTime: Long = 0L
+
+    candSubqueries.foreach(subQuery => {
+      var start = System.nanoTime()
+      val (nodeSet, cluster) = CostEstimater.UnshareOneSubQuery(subQuery)
+      unshareEstimationTime += (System.nanoTime() - start)/1000000
+
+      if (nodeSet.nonEmpty) {
+        start = System.nanoTime()
+        newQueryGraph =
+          unShareSubQueryPhysically(subQuery, nodeSet, cluster, newQueryGraph, batchFinalWork)
+        unsharePhysicalTime += (System.nanoTime() - start)/1000000
+      }
+    })
+
+    println(s"UnShare Estimation time ${unshareEstimationTime}ms")
+    println(s"UnShare Physical time ${unsharePhysicalTime}ms")
+
+    newQueryGraph
+  }
+
+  private def unShareSubQueryPhysically(subQuery: PlanOperator,
+                                 nodeSet: mutable.HashSet[PlanOperator],
+                                 cluster: mutable.HashSet[mutable.HashSet[Int]],
+                                 queryGraph: QueryGraph,
+                                 batchFinalWork: mutable.HashMap[Int, Double]): QueryGraph = {
+    val subQueryToBatchNum = genSubQueryToBatchNumMapping(queryGraph)
+    val newSubQueries = breakIntoMultiSubQueries(subQuery, nodeSet, cluster)
+    val batchNum = subQueryToBatchNum(subQuery)
+
+    // Find new batch numbers
+    subQueryToBatchNum.remove(subQuery)
+    newSubQueries.foreach(newSubQuery => {
+      if (newSubQuery.parentOps.length > 1) { // An independent subquery
+        subQueryToBatchNum.put(newSubQuery, batchNum)
+      } else { // Merged into an old subquery
+        val oldSubQuery = findRootSubQuery(newSubQuery)
+        val oldBatchNum = subQueryToBatchNum(oldSubQuery)
+        subQueryToBatchNum.put(oldSubQuery, math.max(oldBatchNum, batchNum))
+      }
+    })
+
+    // Rebuild dependencies
+    val newQueryGraph = findSubQueries(queryGraph)
+    incExecutionPace(newQueryGraph, batchFinalWork, subQueryToBatchNum)
+  }
+
+  private def incExecutionPace(queryGraph: QueryGraph,
+                               batchFinalWork: mutable.HashMap[Int, Double],
+                               subQueryToBatchNum: mutable.HashMap[PlanOperator, Int]):
+  QueryGraph = {
+    val subQueries = queryGraph.subQueries
+    val numSubQ = subQueries.length
+    val cachedBatchNum = new Array[Int](numSubQ)
+    for (uid <- 0 until numSubQ) {
+      cachedBatchNum(uid) = subQueryToBatchNum(subQueries(uid))
+    }
+    decideNonUniformPace(queryGraph, batchFinalWork, cachedBatchNum)
+  }
+
+  private def findRootSubQuery(node: PlanOperator): PlanOperator = {
+    var root: PlanOperator = node
+    while (!root.isInstanceOf[RootOperator]) {
+      root = root.parentOps(0)
+    }
+    root
+  }
+
+  private def genSubQueryToBatchNumMapping(queryGraph: QueryGraph):
+  mutable.HashMap[PlanOperator, Int] = {
+    val subQueries = queryGraph.subQueries
+    val subQueryToBatchNum = mutable.HashMap.empty[PlanOperator, Int]
+    for (uid <- subQueries.indices) {
+      subQueryToBatchNum.put(subQueries(uid),
+        queryGraph.numBatches(uid))
+    }
+    subQueryToBatchNum
+  }
+
+  private def breakIntoMultiSubQueries(subQuery: PlanOperator,
+                                       nodeSet: mutable.HashSet[PlanOperator],
+                                       cluster: mutable.HashSet[mutable.HashSet[Int]]):
+  mutable.HashSet[PlanOperator] = {
+
+    val isRoot = true
+    val parentNode: PlanOperator = null
+    detachSubQuery(subQuery, parentNode, isRoot)
+
+    val newSubQuerySet = mutable.HashSet.empty[PlanOperator]
+    cluster.foreach(qidGroup => {
+      val newSubQuery = genSubQueryWithQidGroup(subQuery, fromSetQid(qidGroup), isRoot, nodeSet)
+      newSubQuerySet.add(newSubQuery)
+    })
+
+    newSubQuerySet
+  }
+
+  private def detachSubQuery(curNode: PlanOperator,
+                             parentNode: PlanOperator,
+                             isSubQueryRoot: Boolean): Unit = {
+    val isRoot = false
+    if (isSubQueryRoot) {
+      val parentOps = curNode.parentOps
+      parentOps.foreach(parent => {
+        for (childIdx <- parent.childOps.indices) {
+          if (parent.childOps(childIdx) == curNode) {
+            parent.childOps(childIdx) = Optimizer.dummyOperator
+          }
+        }
+      })
+      curNode.childOps.foreach(detachSubQuery(_, curNode, isRoot))
+    } else if (curNode.parentOps.length > 1) {
+      val newParentOps = new ArrayBuffer[PlanOperator]()
+      curNode.parentOps.foreach(parent => {
+        if (parent != parentNode) newParentOps.append(parent)
+      })
+      curNode.setParents(newParentOps.toArray)
+    } else {
+      curNode.childOps.foreach(detachSubQuery(_, curNode, isRoot))
+    }
+
+  }
+
+  private def genSubQueryWithQidGroup(op: PlanOperator,
+                                      qidGroup: Array[Int],
+                                      isSubQueryRoot: Boolean,
+                                      nodeSet: mutable.HashSet[PlanOperator]): PlanOperator = {
+
+    if (!nodeSet.contains(op)) return op
+
+    val isRoot = false
+    var newOP: PlanOperator = null
+    op match {
+      case selOP: SelectOperator if selOP.selectSet.intersect(qidGroup).isEmpty =>
+        newOP = genSubQueryWithQidGroup(selOP.childOps(0), qidGroup, isRoot, nodeSet)
+
+      case _ =>
+        newOP = op.copy()
+        newOP.setQidSet(qidGroup)
+
+        val newChildOPArray = op.childOps.map(genSubQueryWithQidGroup(_, qidGroup, isRoot, nodeSet))
+        setChildren(newOP, newChildOPArray)
+        newOP.setParents(Array.empty[PlanOperator])
+
+        op match {
+          case selOP: SelectOperator =>
+            val newSelSet = selOP.selectSet.intersect(qidGroup)
+            newOP.asInstanceOf[SelectOperator].setSelectSet(newSelSet)
+          case _ =>
+        }
+    }
+
+    if (isSubQueryRoot) {
+      val parentOPs = op.parentOps
+      parentOPs.foreach(parent => {
+        // TODO: This is buggy
+        if (parent.getQidSet.intersect(qidGroup).nonEmpty) {
+          for (childIdx <- parent.childOps.indices) {
+            if (parent.childOps(childIdx) == dummyOperator) {
+              parent.childOps(childIdx) = newOP
+            }
+          }
+          newOP.parentOps = newOP.parentOps ++ Array(parent)
+        }
+      })
+    }
+
+    newOP
+  }
+
+  private def setChildren(op: PlanOperator, childOPArray: Array[PlanOperator]): Unit = {
+    op.setChildren(childOPArray)
+    childOPArray.foreach(child => {
+      child.parentOps = child.parentOps ++ Array(op)
+    })
+  }
+
+  private def fromArrayQid(qidArray: Array[Int]): mutable.HashSet[Int] = {
+    val newSet = mutable.HashSet.empty[Int]
+    qidArray.foreach(newSet.add)
+    newSet
+  }
+
+  private def fromSetQid(qidSet: mutable.HashSet[Int]): Array[Int] = {
+    val arrayBuf = mutable.ArrayBuffer.empty[Int]
+    qidSet.foreach(arrayBuf.append(_))
+    arrayBuf.toArray
+  }
+
+  private def collectPerOPCardMap(queryGraph: QueryGraph): QueryGraph = {
+    val subQueries = queryGraph.subQueries
+    val numSubQ = subQueries.length
+    val queryDependency = queryGraph.queryDependency
+    val finalBatchNums = queryGraph.numBatches
+
+    val execOrder = fromQueryDepToExecOrder(queryDependency, numSubQ)
+    val cacheManagers = new Array[SubQueryCacheManager](numSubQ)
+    for (uid <- 0 until numSubQ) {
+      val uidArray = new Array[Int](0)
+      val cacheMap = mutable.HashMap.empty[String, CachedCostInfo]
+      val enableCache = false
+      cacheManagers(uid) = SubQueryCacheManager(uid, uidArray, cacheMap, enableCache)
+    }
+
+    val collectPerOPFinalWork = false
+    val collectPerOPCardMap = true
+    CostEstimater.estimatePlanGraphCost(subQueries, cacheManagers,
+      finalBatchNums, execOrder, queryDependency, collectPerOPFinalWork, collectPerOPCardMap)
+
     queryGraph
+  }
+
+  private def findUnShareCandidateSubQueries(queryGraph: QueryGraph):
+  mutable.HashSet[PlanOperator] = {
+    val subQueries = queryGraph.subQueries
+    val queryDependency = queryGraph.queryDependency
+
+    val rootUidSet = mutable.HashSet.empty[Int]
+    subQueries.zipWithIndex.filter(pair => {
+      pair._1 match {
+        case _: RootOperator => true
+        case _ => false
+      }
+    }).foreach(pair => {
+      rootUidSet.add(pair._2)
+    })
+
+    // Only consider the first-layer subqueries
+    val candidateUids = mutable.HashSet.empty[Int]
+    val parentDep = fromQueryDepToParentDep(queryDependency)
+    for (uid <- subQueries.indices) {
+      val parentUids = parentDep(uid)
+      if (parentUids.nonEmpty && parentUids.forall(rootUidSet.contains)) {
+        candidateUids.add(uid)
+      }
+    }
+
+    // Filter out queries that do not include join and agg
+    val candSubQueries = mutable.HashSet.empty[PlanOperator]
+    candidateUids.foreach(uid => {
+      val subQuery = subQueries(uid)
+      val isRoot = true
+      if (involveJoinOrAgg(subQuery, isRoot)) {
+        candSubQueries.add(subQuery)
+      }
+    })
+
+    candSubQueries
+  }
+
+  private def involveJoinOrAgg(op: PlanOperator, isSubQueryRoot: Boolean): Boolean = {
+    if (op.parentOps.length > 1 && !isSubQueryRoot) return false
+
+    val isRoot = false
+    op match {
+      case _: JoinOperator => true
+      case _: AggOperator => true
+      case _ =>
+        var ret = false
+        op.childOps.foreach(child => {
+          ret |= involveJoinOrAgg(child, isRoot)
+        })
+        ret
+    }
+
   }
 
   private def assignOPId(op: PlanOperator, startId: Int): Int = {
@@ -554,10 +1153,14 @@ object Optimizer {
           newOP = leftSelect
 
         case SubsumeState.SameSet =>
+          val qid = leftSelect.getQidSet(0)
+          val minFinalWork = math.min(leftSelect.getFinalWork(qid).getOrElse(-1.0),
+            rightSelect.getFinalWork(qid).getOrElse(-1.0))
+          if (minFinalWork > 0) leftSelect.setFinalWork(qid, minFinalWork)
           newOP = leftSelect
 
         case SubsumeState.IntersectSet =>
-          System.err.println("Not supported intersectset")
+          System.err.println(s"Not supported intersectset: $leftSelect, $rightSelect")
           System.exit(1)
       }
 
@@ -585,6 +1188,11 @@ object Optimizer {
         val thatOP = pair._2
         mergeOpForSameQueryHelper(thisOP, thatOP, sigToState)
       })
+
+      val qid = op.getQidSet(0)
+      val minFinalWork = math.min(op.getFinalWork(qid).getOrElse(-1.0),
+            otherOP.getFinalWork(qid).getOrElse(-1.0))
+      if (minFinalWork >= 0) op.setFinalWork(qid, minFinalWork)
 
       newOP = op
     }
@@ -721,11 +1329,18 @@ object Optimizer {
   }
 
   def mergeQidSet(left: PlanOperator,
-                          right: PlanOperator): PlanOperator = {
+                  right: PlanOperator): PlanOperator = {
     val qidSet = new mutable.HashSet[Int]()
     left.getQidSet.foreach(qidSet.add)
     right.getQidSet.foreach(qidSet.add)
     left.setQidSet(qidSet.toArray)
+
+    right.getQidSet.foreach(qid => {
+      right.getFinalWork(qid) match {
+        case Some(finalWork) => left.setFinalWork(qid, finalWork)
+        case None =>
+      }
+    })
 
     left
   }

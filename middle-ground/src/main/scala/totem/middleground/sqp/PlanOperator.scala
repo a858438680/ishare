@@ -37,6 +37,8 @@ abstract class PlanOperator (qidSet: Array[Int],
   var internalQidSet = qidSet
   var copyOP: PlanOperator = _
 
+  private var finalWorkMap = mutable.HashMap.empty[Int, Double]
+
   // These attributes are for code generation
   var subQueryName: String = _
   var subQueryUID: Int = _
@@ -49,6 +51,11 @@ abstract class PlanOperator (qidSet: Array[Int],
   val delCardMap = mutable.HashMap.empty[Int, Double]
   val offSetMap = mutable.HashMap.empty[Int, mutable.HashMap[Int, Double]]
   val delOffSetMap = mutable.HashMap.empty[Int, mutable.HashMap[Int, Double]]
+
+  val innerCardMap = mutable.HashMap.empty[Int, Double]
+  val innerDelCardMap = mutable.HashMap.empty[Int, Double]
+  val outerCardMap = mutable.HashMap.empty[Int, Double]
+  val outerDelCardMap = mutable.HashMap.empty[Int, Double]
 
   def setChildren(childOperators: Array[PlanOperator]): Unit = {
     this.childOps = childOperators
@@ -97,23 +104,58 @@ abstract class PlanOperator (qidSet: Array[Int],
     planOperator.id = id
     planOperator.signature = signature
     planOperator.internalQidSet = internalQidSet
+    planOperator.finalWorkMap = finalWorkMap
 
     planOperator
   }
 
+  var batchIdx = 0
+  var innerBatchIdx = 0
+  var outerBatchIdx = 0
+
   def resetCostInfo(): Unit
 
   protected def basicResetCostInfo(): Unit = {
+    innerCardMap.clear()
+    innerDelCardMap.clear()
+    outerCardMap.clear()
+    outerDelCardMap.clear()
+
     cardMap.clear()
     delCardMap.clear()
     offSetMap.clear()
     delOffSetMap.clear()
+    batchIdx = 0
+    innerBatchIdx = 0
+    outerBatchIdx = 0
+  }
+
+  def getFinalWork(qid: Int): Option[Double] = finalWorkMap.get(qid)
+  def setFinalWork(qid: Int, finalWork: Double): Unit = {
+    finalWorkMap.put(qid, finalWork)
   }
 
   def getQidSet: Array[Int] = internalQidSet
   def setQidSet(newQidSet: Array[Int]): Unit = {
     this.internalQidSet = newQidSet
   }
+
+  private val inputCardMap = mutable.HashMap.empty[Int, Double]
+  private val inputDelCardMap = mutable.HashMap.empty[Int, Double]
+
+  def collectInputCard(qid: Int, card: Double, delCard: Double): Unit = {
+    val oldCard = inputCardMap.getOrElse(qid, 0.0)
+    inputCardMap.put(qid, oldCard + card)
+
+    val oldDelCard = inputDelCardMap.getOrElse(qid, 0.0)
+    inputDelCardMap.put(qid, oldDelCard + delCard)
+  }
+
+  def getInputCard(qid: Int): (Double, Double) = {
+    (inputCardMap(qid), inputDelCardMap(qid))
+  }
+
+  var visited = false
 }
 
 class ScanOperator (qidSet: Array[Int],
@@ -123,8 +165,6 @@ class ScanOperator (qidSet: Array[Int],
                     dfStr: String,
                     tableName: String)
   extends PlanOperator(qidSet, outputAttrs, referenceAttrs, aliasAttrs, dfStr) {
-
-  var batchIdx = 0
 
   override def toString: String = {
     val  qidSetStr = Utils.qidSetToString(internalQidSet)
@@ -146,7 +186,6 @@ class ScanOperator (qidSet: Array[Int],
 
   override def resetCostInfo(): Unit = {
     super.basicResetCostInfo()
-    batchIdx = 0
   }
 
 }
@@ -290,13 +329,43 @@ class JoinOperator (qidSet: Array[Int],
 
   def getJoinType: String = joinType
 
-  def getPostFilter(): String = postFilter
+  def getPostFilter: String = postFilter
 
   override def resetCostInfo(): Unit = {
     super.basicResetCostInfo()
     innerStateSizeMap.clear()
     outerStateSizeMap.clear()
   }
+
+  private val innerInputCardMap = mutable.HashMap.empty[Int, Double]
+  private val innerInputDelCardMap = mutable.HashMap.empty[Int, Double]
+  private val outerInputCardMap = mutable.HashMap.empty[Int, Double]
+  private val outerInputDelCardMap = mutable.HashMap.empty[Int, Double]
+
+  def collectInnerInputCard(qid: Int, card: Double, delCard: Double): Unit = {
+    val oldCard = innerInputCardMap.getOrElse(qid, 0.0)
+    innerInputCardMap.put(qid, oldCard + card)
+
+    val oldDelCard = innerInputDelCardMap.getOrElse(qid, 0.0)
+    innerInputDelCardMap.put(qid, oldDelCard + delCard)
+  }
+
+  def collectOuterInputCard(qid: Int, card: Double, delCard: Double): Unit = {
+    val oldCard = outerInputCardMap.getOrElse(qid, 0.0)
+    outerInputCardMap.put(qid, oldCard + card)
+
+    val oldDelCard = outerInputDelCardMap.getOrElse(qid, 0.0)
+    outerInputDelCardMap.put(qid, oldDelCard + delCard)
+  }
+
+  def getInnerInputCard(qid: Int): (Double, Double) = {
+    (innerInputCardMap(qid), innerInputDelCardMap(qid))
+  }
+
+  def getOuterInputCard(qid: Int): (Double, Double) = {
+    (outerInputCardMap(qid), outerInputDelCardMap(qid))
+  }
+
 }
 
 class AggOperator (qidSet: Array[Int],
@@ -342,6 +411,7 @@ class AggOperator (qidSet: Array[Int],
 
   def getGroupByAttrs: mutable.HashSet[String] = groupByAttrs
   def getAGGFuncDef: mutable.HashMap[String, String] = aggFunc
+  def getAliasFunc: mutable.HashMap[String, String] = aliasFunc
 }
 
 class RootOperator(qidSet: Array[Int],

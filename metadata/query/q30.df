@@ -1,0 +1,35 @@
+def execQ30(spark: SparkSession): Unit = {
+
+  val udaf_q8 = new UDAF_Q8
+
+  val p = DataUtils.loadStreamTable(spark, "part", "p", tpchSchema)
+    .filter($"p_type" === "ECONOMY ANODIZED STEEL")
+  val s = DataUtils.loadStreamTable(spark, "supplier", "s", tpchSchema)
+  val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
+  val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
+    .filter($"o_orderdate" between ("1993-09-01", "1994-05-01"))
+  val c = DataUtils.loadStreamTable(spark, "customer", "c", tpchSchema)
+  val n1Raw = DataUtils.loadStreamTable(spark, "nation", "n1", tpchSchema)
+  val n2Raw = DataUtils.loadStreamTable(spark, "nation", "n2", tpchSchema)
+  val r = DataUtils.loadStreamTable(spark, "region", "r", tpchSchema)
+    .filter($"r_name" === "AMERICA")
+
+  val n1 = n1Raw
+    .select($"n_regionkey".as("n1_regionkey"), $"n_nationkey".as("n1_nationkey"))
+
+  val n2 = n2Raw
+    .select($"n_name".as("n2_name"), $"n_nationkey".as("n2_nationkey"))
+
+  return l
+    .join(o, $"l_orderkey" === $"o_orderkey")
+    .join(p, $"l_partkey" === $"p_partkey")
+    .join(s, $"l_suppkey" === $"s_suppkey")
+    .join(c, $"o_custkey" === $"c_custkey")
+    .join(n1, $"c_nationkey" === $"n1_nationkey")
+    .join(r, $"n1_regionkey" === $"r_regionkey")
+    .join(n2, $"s_nationkey" === $"n2_nationkey")
+    .select(year($"o_orderdate").as("o_year"), ($"l_extendedprice" * ($"l_discount" - 1) * -1).as("volume"), $"n2_name")
+    .groupBy($"o_year")
+    .agg(
+        udaf_q8($"n2_name", $"volume").as("mkt_share"))
+}

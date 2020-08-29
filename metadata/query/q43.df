@@ -1,0 +1,36 @@
+def execQ21(spark: SparkSession): Unit = {
+
+  val count = new Count
+
+  val s = DataUtils.loadStreamTable(spark, "supplier", "s", tpchSchema)
+  val l1 = DataUtils.loadStreamTable(spark, "lineitem", "l1", tpchSchema)
+    .filter(($"l_receiptdate" > $"l_commitdate") and ($"l_shipdate" between ("1994-04-01", "1994-07-01")))
+  val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
+    .filter($"o_orderstatus" === "F")
+  val n = DataUtils.loadStreamTable(spark, "nation", "n", tpchSchema)
+    .filter($"n_name" === "SAUDI ARABIA")
+
+  val l2Raw = DataUtils.loadStreamTable(spark, "lineitem", "l2", tpchSchema)
+    .filter(($"l_receiptdate" > $"l_commitdate") and ($"l_shipdate" between ("1994-04-01", "1994-07-01")))
+
+  val l3Raw = DataUtils.loadStreamTable(spark, "lineitem", "l3", tpchSchema)
+    .filter(($"l_receiptdate" > $"l_commitdate") and ($"l_shipdate" between ("1994-04-01", "1994-07-01")))
+
+  val l2 = l2Raw
+    .select($"l_orderkey".as("l2_orderkey"), $"l_suppkey".as("l2_suppkey"))
+
+  val l3 = l3Raw
+    .select($"l_orderkey".as("l3_orderkey"), $"l_suppkey".as("l3_suppkey"))
+
+  val init_result = l1
+    .join(o, $"l_orderkey" === $"o_orderkey")
+    .join(s, $"l_suppkey" === $"s_suppkey")
+    .join(n, $"s_nationkey" === $"n_nationkey")
+
+  return init_result
+    .join(l2, ($"l_orderkey" === $"l2_orderkey") and ($"l_suppkey" =!= $"l2_suppkey"), "left_semi")
+    .join(l3, ($"l_orderkey" === $"l3_orderkey") and ($"l_suppkey" =!= $"l3_suppkey"), "left_anti")
+    .groupBy($"s_name")
+    .agg(
+        count(lit(1L)).as("numwait"))
+}

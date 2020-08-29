@@ -76,6 +76,17 @@ object ScheduleUtils {
     standaloneLatency
   }
 
+  def fromStandaloneToStack(standaloneLatency: Array[Double]): Array[Double] = {
+    val stackLatency = new Array[Double](standaloneLatency.length)
+    standaloneLatency.zipWithIndex.foreach(pair => {
+      val latency = pair._1
+      val idx = pair._2
+      if (idx == 0) stackLatency(idx) = latency
+      else stackLatency(idx) = latency + stackLatency(idx - 1)
+    })
+   stackLatency
+  }
+
   def parseDependencyFile(fileName: String):
   mutable.HashMap[Int, mutable.HashSet[Int]] = {
     val lines = Source.fromFile(fileName).getLines().map(_.trim).toArray

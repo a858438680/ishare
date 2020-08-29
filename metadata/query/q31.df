@@ -1,0 +1,23 @@
+def execQ31(spark: SparkSession): Unit = {
+
+  val doubleSum = new DoubleSum
+
+  val p = DataUtils.loadStreamTable(spark, "part", "p", tpchSchema)
+    .filter($"p_name" like ("%gray%"))
+  val s = DataUtils.loadStreamTable(spark, "supplier", "s", tpchSchema)
+  val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
+  val ps = DataUtils.loadStreamTable(spark, "partsupp", "ps", tpchSchema)
+  val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
+  val n = DataUtils.loadStreamTable(spark, "nation", "n", tpchSchema)
+
+  return l
+    .join(p, $"l_partkey" === $"p_partkey")
+    .join(o, $"l_orderkey" === $"o_orderkey")
+    .join(ps, $"l_partkey" === $"ps_partkey" and $"l_suppkey" === $"ps_suppkey")
+    .join(s, $"l_suppkey" === $"s_suppkey")
+    .join(n, $"s_nationkey" === $"n_nationkey")
+    .select($"n_name".as("nation"), year($"o_orderdate").as("o_year"), (($"l_extendedprice" * ($"l_discount" - 1) * -1) - $"ps_supplycost" * $"l_quantity").as("amount"))
+    .groupBy($"nation", $"o_year")
+    .agg(
+      doubleSum($"amount").as("sum_profit"))
+}

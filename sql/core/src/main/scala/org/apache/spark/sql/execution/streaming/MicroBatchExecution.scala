@@ -676,7 +676,7 @@ class MicroBatchExecution(
       lastExecution.executedPlan // Force the lazy generation of execution plan
       // SlothDB: some SlothDB optimizations
       if (SlothDBContext.enable_slothdb) {
-        lastExecution.slothdbOptimization(runId, this)
+        lastExecution.slothdbOptimization(runId, this, totalBatchNum)
         lastExecution.sqpOptimization(subQueryInfo)
         // if (execution_mode == INCAWARE_SUBPLAN ||
         //     execution_mode == INCAWARE_PATH ||

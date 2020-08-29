@@ -21,7 +21,7 @@ REMOTE_SPARK=$REMOTE:/tank/hdfs/sqp/spark
 #scp $TPCH_JAR $SQL_JAR $EXAMPLE_JAR $REMOTE_SPARK/jars/
 scp $TPCH_JAR $REMOTE_SPARK/jars/
 #scp $CAT_JAR $REMOTE_SPARK/jars/
-#scp $SQL_JAR $REMOTE_SPARK/jars/
+scp $SQL_JAR $REMOTE_SPARK/jars/
 #scp $TPCH_JAR $REMOTE_SPARK/jars/
 #scp $TPCH_JAR $SQL_JAR $REMOTE_SPARK/jars/
 #scp $CAT_JAR $REMOTE_SPARK/jars/

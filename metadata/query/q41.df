@@ -1,0 +1,28 @@
+def exec41(spark: SparkSession): Unit = {
+
+  val sum_disc_price = new Sum_disc_price
+
+  val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
+    .filter(($"l_shipinstruct" === "DELIVER IN PERSON") and ($"l_shipmode" isin ("AIR", "AIR REG")))
+  val p = DataUtils.loadStreamTable(spark, "part", "p", tpchSchema)
+
+  return l
+    .join(p, $"l_partkey" === $"p_partkey"
+    and ((($"p_brand" === "Brand#12") and
+    ($"p_container" isin("SM CASE", "SM BOX", "SM PACK", "SM PKG")) and
+    ($"l_quantity" >= 1 and $"l_quantity" <= 11) and
+    ($"p_size" between(1, 5))
+     )
+     or (($"p_brand" === "Brand#23") and
+    ($"p_container" isin("MED BAG", "MED BOX", "MED PKG", "MED PACK")) and
+    ($"l_quantity" >= 10 and $"l_quantity" <= 20) and
+    ($"p_size" between(1, 10))
+     )
+     or (($"p_brand" === "Brand#34") and
+    ($"p_container" isin("LG CASE", "LG BOX", "LG PACK", "LG PKG")) and
+    ($"l_quantity" >= 20 and $"l_quantity" <= 30) and
+    ($"p_size" between(1, 15)))))
+    .agg(
+        sum_disc_price($"l_extendedprice", $"l_discount").as("revenue"))
+
+}

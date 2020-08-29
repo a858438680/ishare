@@ -49,6 +49,7 @@ object TestSQP {
         "[Zookeeper address]" +
         "[Path to hdfs command]" +
         "[Execution mode: 0 - NoShare, 1 - BatchShare, 2 - SQPShare]" +
+        "[Enable Unshare: True or False]" +
         "[DF directory]" +
         "[Config file]" +
         "[Pred file]")
@@ -69,13 +70,15 @@ object TestSQP {
       if (args(9).compareTo("0") == 0) ExecutionMode.NoShare
       else if (args(9).compareTo("1") == 0) ExecutionMode.BatchShare
       else ExecutionMode.SQPShare
-
-    val dfDir = args(10)
-    val configFile = args(11)
-    val predFile = args(12)
+    val enableUnShare =
+      if (args(10).toLowerCase.compareTo("true") == 0) true
+      else false
+    val dfDir = args(11)
+    val configFile = args(12)
+    val predFile = args(13)
 
     Optimizer.initializeOptimizer(predFile)
-    val optimizedQueries = optimizeMultiQuery(dfDir, configFile, executionMode)
+    val optimizedQueries = optimizeMultiQuery(dfDir, configFile, executionMode, enableUnShare)
 
     val start = System.nanoTime()
     val pair = QueryGenerator.generateQueryAndConfiguration(optimizedQueries)
@@ -85,14 +88,16 @@ object TestSQP {
     val queryConfig = pair._2
 
     val testSQP = new TestSQP(bootstrap, shuffleNum, statDIR, SF, hdfsRoot, inputPartitions,
-      kafkaCommand, zookeeper, hdfsCommand, port, executionMode, subQueries, queryConfig)
+      kafkaCommand, zookeeper, hdfsCommand, port, executionMode, enableUnShare,
+      subQueries, queryConfig)
 
     testSQP.startQueries()
   }
 
   private def optimizeMultiQuery(dir: String,
                                  configName: String,
-                                 executionMode: ExecutionMode.Value): QueryGraph = {
+                                 executionMode: ExecutionMode.Value,
+                                 enableUnShare: Boolean): QueryGraph = {
     var start = System.nanoTime()
     val queryGraph = Utils.getParsedQueryGraph(dir, configName)
     val parseTime = (System.nanoTime() - start)/1000000
@@ -104,7 +109,7 @@ object TestSQP {
       if (executionMode == ExecutionMode.BatchShare) {
         Optimizer.OptimizeUsingBatchMQO(queryGraph)
       } else if (executionMode == ExecutionMode.SQPShare) {
-        Optimizer.OptimizeUsingSQP(queryGraph)
+        Optimizer.OptimizeUsingSQP(queryGraph, enableUnShare)
       } else { // No Sharing
         Optimizer.OptimizedWithoutSharing(queryGraph)
       }
@@ -121,14 +126,17 @@ class TestSQP (bootstrap: String, shuffleNum: String, statDIR: String, SF: Doubl
               hdfsRoot: String, inputPartitions: Int, kafkaCommand: String,
               zookeeper: String, hdfsCommand: String, port: Int,
               executionMode: ExecutionMode.Value,
+              enableUnShare: Boolean,
               subQueries: Array[TPCHQuery], queryConfig: QueryConfig) {
 
   if (executionMode == ExecutionMode.NoShare) {
     println("No Shared Execution")
   } else if (executionMode == ExecutionMode.BatchShare) {
     println("Shared Execution using Batch Optimizer")
+  } else if (enableUnShare) {
+    println("Shared Execution of iShare(True)")
   } else {
-    println("Shared Execution of SQP")
+    println("Shared Execution of iShare(False)")
   }
 
   DataUtils.bootstrap = bootstrap
@@ -214,7 +222,13 @@ class TestSQP (bootstrap: String, shuffleNum: String, statDIR: String, SF: Doubl
 
     // subQueries.foreach(_.join())
     serverThread.join()
-    serverThread.reportStats(statDIR, executionMode)
+    val execStr =
+      if (executionMode == ExecutionMode.SQPShare && enableUnShare) {
+        executionMode.toString + "(True)"
+      } else if (executionMode == ExecutionMode.SQPShare && !enableUnShare) {
+        executionMode.toString + "(False)"
+      } else executionMode.toString
+    serverThread.reportStats(statDIR, execStr)
 
     if (executionMode != ExecutionMode.NoShare) {
       deleteSharedTopics()
@@ -299,9 +313,9 @@ class ServerThread (numSubQ: Int, port: Int,
           }
           val execTime =
             if (curStep == 0) {
-              msg.execTime - initialStartupTime
+              math.max(msg.execTime - initialStartupTime, 10)
             } else {
-              msg.execTime
+              math.max(msg.execTime, 10)
             }
           totalTime(uid) += execTime
           allTotalTime += execTime
@@ -321,7 +335,7 @@ class ServerThread (numSubQ: Int, port: Int,
     server.stopServerSocket()
   }
 
-  def reportStats(statDir: String, executionMode: ExecutionMode.Value): Unit = {
+  def reportStats(statDir: String, executionModeStr: String): Unit = {
     for (uid <- 0 until numSubQ) {
       println(s"${qnames(uid)}, batchNum ${numBatchArray(uid)}")
       printf("total time\tfinal time\n")
@@ -341,19 +355,19 @@ class ServerThread (numSubQ: Int, port: Int,
     val timestamp = Utils.getCurTimeStamp()
 
     // Write stats into files
-    writeSubqueryInfo(statDir, executionMode, timestamp)
-    writeLatencyInfo(statDir, executionMode, timestamp, rootQueries, latencyMap)
-    writeAggInfo(statDir, executionMode, timestamp)
+    writeSubqueryInfo(statDir, executionModeStr, timestamp)
+    writeLatencyInfo(statDir, executionModeStr, timestamp, rootQueries, latencyMap)
+    writeAggInfo(statDir, executionModeStr, timestamp)
   }
 
   private def writeSubqueryInfo(statDir: String,
-                                executionMode: ExecutionMode.Value,
+                                executionModeStr: String,
                                 timestamp: String): Unit = {
     // Write standalone latency for each subquery
     val subQueryFile = statDir + "/subquery.stat"
     val subQueryWriter = new PrintWriter(new FileWriter(subQueryFile, true))
     for (uid <- 0 until numSubQ) {
-      subQueryWriter.println(s"${timestamp}\t${executionMode}\t${uid}\t${qnames(uid)}\t" +
+      subQueryWriter.println(s"${timestamp}\t${executionModeStr}\t${uid}\t${qnames(uid)}\t" +
         s"${numBatchArray(uid)}\t${totalTime(uid)}\t${finalTime(uid)}")
     }
     subQueryWriter.print("\n")
@@ -365,7 +379,7 @@ class ServerThread (numSubQ: Int, port: Int,
     for (uid <- 0 until numSubQ) {
       val depUids = dependency(uid).toArray
       val depStr = uidArrayToString(depUids)
-      depWriter.println(s"${timestamp}\t${executionMode}\t${uid}\t${depStr}")
+      depWriter.println(s"${timestamp}\t${executionModeStr}\t${uid}\t${depStr}")
     }
     depWriter.print("\n")
     depWriter.close()
@@ -383,7 +397,7 @@ class ServerThread (numSubQ: Int, port: Int,
   }
 
   private def writeLatencyInfo(statDir: String,
-                               executionMode: ExecutionMode.Value,
+                               executionModeStr: String,
                                timestamp: String,
                                rootQueries: Array[Int],
                                latencyMap: mutable.HashMap[Int, Double]): Unit = {
@@ -392,7 +406,7 @@ class ServerThread (numSubQ: Int, port: Int,
     val stackWriter = new PrintWriter(new FileWriter(stackFile, true))
     rootQueries.foreach(uid => {
       val latency = latencyMap(uid)
-      stackWriter.println(s"${timestamp}\t$executionMode\t" +
+      stackWriter.println(s"${timestamp}\t$executionModeStr\t" +
         s"${getRawQueryName(qnames(uid))}\t$latency")
     })
     stackWriter.print("\n")
@@ -410,7 +424,7 @@ class ServerThread (numSubQ: Int, port: Int,
           latency - prevLatency
         }
       prevUid = uid
-      standaloneWriter.println(s"${timestamp}\t$executionMode\t" +
+      standaloneWriter.println(s"${timestamp}\t$executionModeStr\t" +
         s"${getRawQueryName(qnames(uid))}\t$aloneLatency")
     })
 
@@ -419,11 +433,11 @@ class ServerThread (numSubQ: Int, port: Int,
   }
 
   private def writeAggInfo(statDir: String,
-                           executionMode: ExecutionMode.Value,
+                           executionModeStr: String,
                            timestamp: String): Unit = {
     val aggFile = statDir + "/total.stat"
     val aggWriter = new PrintWriter(new FileWriter(aggFile, true))
-    aggWriter.println(s"${timestamp}\t$executionMode\t$allTotalTime")
+    aggWriter.println(s"${timestamp}\t$executionModeStr\t$allTotalTime")
     aggWriter.close()
   }
 

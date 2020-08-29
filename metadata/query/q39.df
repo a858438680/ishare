@@ -1,0 +1,23 @@
+def execQ39(spark: SparkSession): Unit = {
+
+  val doubleAvg = new DoubleAvg
+  val doubleSum = new DoubleSum
+
+  val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
+  val p = DataUtils.loadStreamTable(spark, "part", "p", tpchSchema)
+    .filter($"p_brand" === "Brand#24" and $"p_container" === "MED BOX")
+  val lb = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
+
+  val agg_l = lb
+    .groupBy($"l_partkey")
+    .agg(
+        (doubleAvg($"l_quantity") * 0.2).as("avg_quantity"))
+    .select($"l_partkey".as("agg_l_partkey"), $"avg_quantity")
+
+  return l
+    .join(agg_l, $"l_partkey" === $"agg_l_partkey" and $"l_quantity" < $"avg_quantity")
+    .join(p, $"l_partkey" === $"p_partkey")
+    .agg(
+        (doubleSum($"l_extendedprice") / 7.0).as("avg_yearly"))
+
+}

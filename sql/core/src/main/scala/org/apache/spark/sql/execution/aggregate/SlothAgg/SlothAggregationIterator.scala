@@ -53,7 +53,8 @@ class SlothAggregationIterator (
     deltaOutput: Boolean,
     updateOuput: Boolean,
     repairMode: Boolean,
-    clusterID: Int)
+    clusterID: Int,
+    lastBatch: Boolean)
 extends Iterator[InternalRow] with Logging {
 
   private val opRtId = SlothRuntimeOpId(stateInfo.get.operatorId, stateInfo.get.queryRunId)
@@ -230,6 +231,8 @@ extends Iterator[InternalRow] with Logging {
       }
     } else { null }
 
+  if (hashMapforFullData != null) hashMapforFullData.setLastBatch(lastBatch)
+
   // private[this] val hashMapforFullData: SlothAggFullMap = null
 
   private[this] val stateStoreforResult =
@@ -307,10 +310,10 @@ extends Iterator[InternalRow] with Logging {
       false, false)
 
   private def processRow(groupKey: UnsafeRow, buffer: UnsafeRow,
-                         input: InternalRow, isNewGroup: Boolean): Unit = {
+                         input: InternalRow, isNewGroup: Boolean,
+                         isInsert: Boolean): Unit = {
 
     val unsafeInput = input.asInstanceOf[UnsafeRow]
-    val isInsert = unsafeInput.isInsert
     unsafeInput.cleanStates()
     unsafeInput.clearQidSet()
 
@@ -360,28 +363,29 @@ extends Iterator[InternalRow] with Logging {
     }
   }
 
-  private def processInputs(): Unit = {
-    if (groupingExpressions.isEmpty && inputIter.hasNext) {
-      // If there is no grouping expressions, we can just reuse the same buffer over and over again.
-      // Note that it would be better to eliminate the hash map entirely in the future.
-      val groupingKey = groupingProjection.apply(null)
-      val buffer: UnsafeRow = hashMapforResult.getAggregationBufferFromUnsafeRow(groupingKey)
-      var isNewGroup = true
-      while (inputIter.hasNext) {
-        val newInput = inputIter.next()
-        processRow(groupingKey, buffer, newInput, isNewGroup)
-        isNewGroup = false
-      }
-    } else {
-      while (inputIter.hasNext) {
-        val newInput = inputIter.next()
-        val groupingKey = groupingProjection.apply(newInput)
-        val buffer: UnsafeRow = hashMapforResult.getAggregationBufferFromUnsafeRow(groupingKey)
-        val isNewGroup = hashMapforResult.getIsNewGroup
-        processRow(groupingKey, buffer, newInput, isNewGroup)
-      }
-    }
-  }
+  // private def processInputs(): Unit = {
+  //   if (groupingExpressions.isEmpty && inputIter.hasNext) {
+  //     // If there is no grouping expressions,
+  //     // we can just reuse the same buffer over and over again.
+  //     // Note that it would be better to eliminate the hash map entirely in the future.
+  //     val groupingKey = groupingProjection.apply(null)
+  //     val buffer: UnsafeRow = hashMapforResult.getAggregationBufferFromUnsafeRow(groupingKey)
+  //     var isNewGroup = true
+  //     while (inputIter.hasNext) {
+  //       val newInput = inputIter.next()
+  //       processRow(groupingKey, buffer, newInput, isNewGroup)
+  //       isNewGroup = false
+  //     }
+  //   } else {
+  //     while (inputIter.hasNext) {
+  //       val newInput = inputIter.next()
+  //       val groupingKey = groupingProjection.apply(newInput)
+  //       val buffer: UnsafeRow = hashMapforResult.getAggregationBufferFromUnsafeRow(groupingKey)
+  //       val isNewGroup = hashMapforResult.getIsNewGroup
+  //       processRow(groupingKey, buffer, newInput, isNewGroup)
+  //     }
+  //   }
+  // }
 
   def getClusterID: Int = clusterID
 
@@ -391,28 +395,28 @@ extends Iterator[InternalRow] with Logging {
   private var singleGroupBuffer: UnsafeRow = null
   private var isNewSingleGroup = true
 
-  def processSingleGroupInput(newInput: InternalRow): Unit = {
+  def processSingleGroupInput(newInput: InternalRow, isInsert: Boolean): Unit = {
     if (singleGroupBuffer == null) {
       singleGroupBuffer = hashMapforResult.getAggregationBufferFromUnsafeRow(singleGroupingKey)
     }
-    processRow(singleGroupingKey, singleGroupBuffer, newInput, isNewSingleGroup)
+    processRow(singleGroupingKey, singleGroupBuffer, newInput, isNewSingleGroup, isInsert)
     if (isNewSingleGroup) {
       isNewSingleGroup = false
     }
   }
 
-  def processMultiGroupInput(newInput: InternalRow): Unit = {
+  def processMultiGroupInput(newInput: InternalRow, isInsert: Boolean): Unit = {
     val groupingKey = groupingProjection.apply(newInput)
     val buffer: UnsafeRow = hashMapforResult.getAggregationBufferFromUnsafeRow(groupingKey)
     val isNewGroup = hashMapforResult.getIsNewGroup
-    processRow(groupingKey, buffer, newInput, isNewGroup)
+    processRow(groupingKey, buffer, newInput, isNewGroup, isInsert)
   }
 
   // Recompute NonInc functions (i.e. max/min)
   private def computeNonInc(): Unit = {
     if (hashMapforFullData != null) {
-      val start = System.nanoTime()
-      val numKeys = hashMapforFullData.getNumKeys
+      // val start = System.nanoTime()
+      // val numKeys = hashMapforFullData.getNumKeys
       for ((nonIncMetaPerExpr, exprIndex) <- nonIncMetaData.zipWithIndex) {
         val iter = hashMapforFullData.getGroupIteratorbyExpr(
           nonIncMetaPerExpr, exprIndex, hashMapforMetaData)

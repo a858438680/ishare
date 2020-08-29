@@ -136,7 +136,8 @@ class SlothAggMetaMap (
     if (repairMode) {
       val metaData = hashMap.get(groupkey)
       if (metaData.isDefined) {
-        metaData.get.hasChange(exprIndex)
+        val hasChange = metaData.get.hasChange(exprIndex)
+        hasChange
       }
       else false
     } else {
@@ -228,9 +229,9 @@ class SlothAggMetaMap (
       if (tmpValRow == null) {
         new AggMetaData(0, 0L, 0L, nonIncHasChange)
       } else {
-        if (tmpValRow.getBoolean(hasChangeIndex)) {
-          nonIncHasChange.zipWithIndex.foreach(pair => nonIncHasChange(pair._2) = true)
-        }
+        // if (tmpValRow.getBoolean(hasChangeIndex)) {
+        //   nonIncHasChange.zipWithIndex.foreach(pair => nonIncHasChange(pair._2) = true)
+        // }
         new AggMetaData(tmpValRow.getInt(counterIndex), tmpValRow.getLong(maxIdIndex),
           tmpValRow.getLong(maxIdIndex), nonIncHasChange)
       }
@@ -253,7 +254,8 @@ class SlothAggMetaMap (
         s"group counter should be larger than 0 when it is written into store")
       valueRow.setInt(counterIndex, value.counter)
       valueRow.setLong(maxIdIndex, value.newMaxID)
-      valueRow.setBoolean(hasChangeIndex, value.hasChange.exists(_ == true))
+      // valueRow.setBoolean(hasChangeIndex, value.hasChange.exists(_ == true))
+      valueRow.setBoolean(hasChangeIndex, false)
       stateStore.put(key, valueRow)
     }
 

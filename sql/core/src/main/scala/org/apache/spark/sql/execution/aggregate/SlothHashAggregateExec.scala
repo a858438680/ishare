@@ -134,27 +134,32 @@ case class SlothHashAggregateExec (
             deltaOutput,
             updateOutput,
             repairMode,
-            clusterID)
+            clusterID,
+            lastBatch)
         }
 
 
       if (groupingExpressions.isEmpty && iter.hasNext) {
         while (iter.hasNext) {
           val newInput = iter.next()
+          val qidSetMask = newInput.getQidSet()
+          val isInsert = newInput.isInsert()
           resIterArray.foreach(clusterIter => {
             val clusterID = clusterIter.getClusterID
-            if ((qidCluster(clusterID) & newInput.getQidSet()) != 0L) {
-              clusterIter.processSingleGroupInput(newInput)
+            if ((qidCluster(clusterID) & qidSetMask) != 0L) {
+              clusterIter.processSingleGroupInput(newInput, isInsert)
             }
           })
         }
       } else {
         while (iter.hasNext) {
           val newInput = iter.next()
+          val qidSetMask = newInput.getQidSet()
+          val isInsert = newInput.isInsert()
           resIterArray.foreach(clusterIter => {
             val clusterID = clusterIter.getClusterID
-            if ((qidCluster(clusterID) & newInput.getQidSet()) != 0L) {
-              clusterIter.processMultiGroupInput(newInput)
+            if ((qidCluster(clusterID) & qidSetMask) != 0L) {
+              clusterIter.processMultiGroupInput(newInput, isInsert)
             }
           })
         }
@@ -185,6 +190,7 @@ case class SlothHashAggregateExec (
   private[this] var deltaOutput: Boolean = true
   private[this] var updateOutput: Boolean = true
   private[this] var repairMode: Boolean = true
+  private[this] var lastBatch: Boolean = true
 
   private[this] var qidCluster: Array[Long] = _
 
@@ -201,6 +207,8 @@ case class SlothHashAggregateExec (
   override def verboseString: String = toString(verbose = true)
 
   override def simpleString: String = toString(verbose = false)
+
+  override def setLastBatch(isLastBatch: Boolean): Unit = {lastBatch = isLastBatch}
 
   private def toString(verbose: Boolean): String = {
     val allAggregateExpressions = aggregateExpressions

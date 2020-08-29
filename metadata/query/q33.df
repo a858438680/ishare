@@ -1,0 +1,37 @@
+def execQ33(spark: SparkSession): Unit = {
+  val doubleSum = new DoubleSum
+
+  val ps = DataUtils.loadStreamTable(spark, "partsupp", "ps", tpchSchema)
+  val s = DataUtils.loadStreamTable(spark, "supplier", "s", tpchSchema)
+  val n = DataUtils.loadStreamTable(spark, "nation", "n", tpchSchema)
+    .filter($"n_name" === "GERMANY")
+
+  val subquery = execQ11_subquery(spark)
+
+  return s
+    .join(n, $"s_nationkey" === $"n_nationkey")
+    .join(ps, $"s_suppkey" === $"ps_suppkey")
+    .groupBy($"ps_partkey")
+    .agg(
+        doubleSum($"ps_supplycost" * $"ps_availqty").as("product_value"))
+    .join(subquery, $"product_value" > $"small_value", "cross")
+    .select($"ps_partkey", $"product_value")
+
+}
+
+def execQ11_subquery(spark: SparkSession): DataFrame = {
+
+  val doubleSum = new DoubleSum
+
+  val ps = DataUtils.loadStreamTable(spark, "partsupp", "ps", tpchSchema)
+  val s = DataUtils.loadStreamTable(spark, "supplier", "s", tpchSchema)
+  val n = DataUtils.loadStreamTable(spark, "nation", "n", tpchSchema)
+    .filter($"n_name" === "GERMANY")
+
+  return s
+    .join(n, $"s_nationkey" === $"n_nationkey")
+    .join(ps, $"s_suppkey" === $"ps_suppkey")
+    .agg(
+      doubleSum($"ps_supplycost" * $"ps_availqty" * 0.0001/SF).as("small_value"))
+}
+

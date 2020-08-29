@@ -1,0 +1,16 @@
+def execQ26(spark: SparkSession): Unit = {
+
+  val order_count = new Count
+
+  val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
+    .filter($"o_orderdate" between ("1993-08-15", "1993-11-15"))
+
+  val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
+    .filter(($"l_receiptdate" > $"l_commitdate") and ($"l_shipdate" between ("1994-08-15", "1994-11-15")))
+
+  return o
+    .join(l, $"o_orderkey" === $"l_orderkey", "left_semi")
+    .groupBy($"o_orderpriority")
+    .agg(
+      order_count(lit(1L)).as("order_count"))
+}

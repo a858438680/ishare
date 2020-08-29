@@ -1,0 +1,17 @@
+def execQ35(spark: SparkSession): Unit = {
+
+  val count_not_null = new Count_not_null
+  val custdist = new Count
+
+  val c = DataUtils.loadStreamTable(spark, "customer", "c", tpchSchema)
+  val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
+
+  return c
+    .join(o, $"c_custkey" === $"o_custkey", "left_outer")
+    .groupBy($"c_custkey")
+    .agg(
+      count_not_null($"o_orderkey").as("c_count"))
+    .groupBy($"c_count")
+    .agg(
+      custdist(lit(1L)).as("custdist"))
+}

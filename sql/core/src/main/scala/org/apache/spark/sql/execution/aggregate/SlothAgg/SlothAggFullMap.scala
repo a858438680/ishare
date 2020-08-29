@@ -56,8 +56,14 @@ class SlothAggFullMap(
 
   private var stateStore = getStateStore(keyWithIndexSchema, valSchema)
 
+  private var lastBatch = false
+
   def getStoreName(): String = {
     s"${storeName}-${clusterID}"
+  }
+
+  def setLastBatch(isLastBatch: Boolean): Unit = {
+    this.lastBatch = isLastBatch
   }
 
   def reInit(stateInfo: Option[StatefulOperatorStateInfo],
@@ -298,18 +304,19 @@ class SlothAggFullMap(
       .toSeq
 
     var deleteCounter = 0
-    val sortedWithoutDeletes = pairSeq.sortWith(sortFunc)
-      .filter(pair => {
-        val key = pair.key
-        val value = pair.value
-        if (value.isInsert && deleteCounter == 0) true
-        else {
-          stateStore.remove(key)
-          if (value.isInsert) deleteCounter -= 1
-          else deleteCounter += 1
-          false
-        }
-      })
+    val sortedWithoutDeletes =
+        pairSeq.sortWith(sortFunc)
+          .filter(pair => {
+            val key = pair.key
+            val value = pair.value
+            if (value.isInsert && deleteCounter == 0) true
+            else {
+              stateStore.remove(key)
+              if (value.isInsert) deleteCounter -= 1
+              else deleteCounter += 1
+              false
+            }
+          })
 
     new SortedIterator(sortedWithoutDeletes, eqGroupFunc)
   }

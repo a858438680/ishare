@@ -1,0 +1,12 @@
+def execQ28(spark: SparkSession): Unit = {
+
+  val doubleSum = new DoubleSum
+
+  val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
+    .filter(($"l_shipdate" between ("1994-01-01", "1995-01-01")) and ($"l_discount" between (0.04, 0.06)) and ($"l_quantity" < 24.0))
+
+  return l
+    .agg(
+      doubleSum($"l_extendedprice" * $"l_discount").as("revenue"))
+
+}

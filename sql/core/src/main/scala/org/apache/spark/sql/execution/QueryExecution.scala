@@ -290,9 +290,9 @@ class QueryExecution(val sparkSession: SparkSession, val logical: LogicalPlan) {
 
   private def initialStarupTime = 0
   private def perExecutionStartupTime = 60
-  private def joinStartupTime = 15
-  private def aggStartupTime = 15
-  private def filterStartupTime = 5
+  private def joinStartupTime = 10
+  private def aggStartupTime = 10
+  private def filterStartupTime = 1
   private def sourceStartupTime = 5
 
   private def getPerOpStartUpTime(plan: SparkPlan): Long = {
@@ -335,6 +335,16 @@ class QueryExecution(val sparkSession: SparkSession, val logical: LogicalPlan) {
     plan.children.foreach(child => setFirstBatch(child, isFirstBatch))
   }
 
+  private def setLastBatch(plan: SparkPlan, isLastBatch: Boolean): Unit = {
+    if (plan == null) return
+    plan match {
+      case agg: SlothHashAggregateExec =>
+        agg.setLastBatch(isLastBatch)
+      case _ =>
+    }
+    plan.children.foreach(child => setLastBatch(child, isLastBatch))
+  }
+
   def setRepairMode(plan: SparkPlan, repairMode: Boolean): Unit = {
     if (plan == null) return
     plan match {
@@ -346,7 +356,9 @@ class QueryExecution(val sparkSession: SparkSession, val logical: LogicalPlan) {
   }
 
   // Several optimization techniques by SlothDB
-  def slothdbOptimization(runId: UUID, microExec: MicroBatchExecution): Unit = {
+  def slothdbOptimization(runId: UUID,
+                          microExec: MicroBatchExecution,
+                          totalBatchNum: Int): Unit = {
     // SlothDB: Set delta output for the last aggregate
     // TODO: this assumes sort operator, if exists,
     // TODO: is at the end of a query plan preceded by an aggregate
@@ -379,6 +391,7 @@ class QueryExecution(val sparkSession: SparkSession, val logical: LogicalPlan) {
 
     // Set isFirstBatch for Static Tables
     setFirstBatch(executedPlan, microExec.currentBatchId == 0)
+    setLastBatch(executedPlan, microExec.currentBatchId == totalBatchNum - 1)
 
     // Set repair mode
     // val repairConf = sparkSession.conf.get(SQLConf.SLOTHDB_ENABLE_INCREMENTABILITY)

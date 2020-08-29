@@ -26,19 +26,26 @@ object TestPaceOptimizer {
   def main(args: Array[String]): Unit = {
 
     if (args.length < 3) {
-      System.err.println("Usage: TestPaceOptimizer [DF directory] [Config file] [Pred file]")
+      System.err.println("Usage: TestPaceOptimizer [DF directory]" +
+        "[Config file] [Pred file] [Enable Unshare]")
       System.exit(1)
     }
 
     Optimizer.initializeOptimizer(args(2))
-    testOptimizerForPaceConfiguration(args(0), args(1))
+    testOptimizerForPaceConfiguration(args(0), args(1), args(3))
   }
 
-  private def testOptimizerForPaceConfiguration(dir: String, configName: String): Unit = {
+  private def testOptimizerForPaceConfiguration(dir: String,
+                                                configName: String,
+                                                enableUnshare: String): Unit = {
+    val unshare =
+      if (enableUnshare.toLowerCase.compareTo("true") == 0) true
+      else false
 
     val queryGraph = Utils.getParsedQueryGraph(dir, configName)
-    val newQueryGraph = Optimizer.OptimizeUsingBatchMQO(queryGraph)
+    // val newQueryGraph = Optimizer.OptimizeUsingBatchMQO(queryGraph)
     // val newQueryGraph = Optimizer.OptimizedWithoutSharing(queryGraph)
+    val newQueryGraph = Optimizer.OptimizeUsingSQP(queryGraph, unshare)
 
     Utils.printQueryGraph(newQueryGraph)
     Utils.printPaceConfig(newQueryGraph)

@@ -1,0 +1,16 @@
+def execQ12(spark: SparkSession): Unit = {
+
+  val udaf_q12_low = new UDAF_Q12_LOW
+  val udaf_q12_high = new UDAF_Q12_HIGH
+
+  val o = DataUtils.loadStreamTable(spark, "orders", "o", tpchSchema)
+  val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
+    .filter(($"l_shipmode" === "MAIL") and ($"l_receiptdate" > $"l_commitdate") and ($"l_shipdate" < $"l_commitdate") and ($"l_receiptdate" === "1994-02-01"))
+
+  return l
+    .join(o, $"l_orderkey" === $"o_orderkey")
+    .groupBy($"l_shipmode")
+    .agg(
+        udaf_q12_high($"o_orderpriority").as("high_line_count"),
+        udaf_q12_low($"o_orderpriority").as("low_line_count"))
+}

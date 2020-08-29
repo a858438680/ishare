@@ -1,0 +1,32 @@
+def execQ37(spark: SparkSession): Unit = {
+
+  val count = new Count
+
+  val s = DataUtils.loadStreamTable(spark, "supplier", "s", tpchSchema)
+  val revenue = execQ37_subquery(spark)
+  val sub_revenue = execQ37_subquery(spark)
+
+  val max_revenue = sub_revenue
+    .agg(
+        max($"total_revenue").as("max_revenue"))
+
+  return s
+    .join(revenue, $"s_suppkey" === $"supplier_no")
+    .join(max_revenue, $"total_revenue" >= $"max_revenue", "cross")
+    .select($"s_suppkey", $"s_name", $"s_address", $"s_phone", $"total_revenue")
+}
+
+def execQ37_subquery(spark: SparkSession): DataFrame = {
+
+  val sum_disc_price = new Sum_disc_price
+
+  val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
+    .filter($"l_shipdate" between ("1995-02-01", "1995-05-01"))
+
+  return l
+    .groupBy($"l_suppkey")
+    .agg(
+        sum_disc_price($"l_extendedprice", $"l_discount").as("total_revenue"))
+    .select($"l_suppkey".as("supplier_no"), $"total_revenue")
+}
+
