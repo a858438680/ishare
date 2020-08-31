@@ -372,7 +372,9 @@ object CostEstimater {
           } else {
             val baseSize = inputInsert + inputDelete
             val baseCost = baseSize * AGGREADCOST + aggStartupCost + additionalCost
-            costInfo.totalCost += getMatCost(baseCost, totalOutInsert + totalOutDelete, aggOP)
+            if (!isInQP) {
+              costInfo.totalCost += getMatCost(baseCost, totalOutInsert + totalOutDelete, aggOP)
+            }
             materialize(costInfo, aggOP, qidSet)
 
             if (collectFinalBatch) subQueryQidSet.foreach(aggOP.setFinalWork(_, baseCost))

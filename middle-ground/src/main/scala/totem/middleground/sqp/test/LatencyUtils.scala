@@ -25,14 +25,14 @@ import scala.io.Source
 object LatencyUtils {
 
   def getConstraints(batchFileName: String,
-                             goalFileName: String): mutable.HashMap[Int, Double] = {
+                     goalFileName: String): mutable.HashMap[Int, Double] = {
     val batchTimeMap = parseBatchTimeFile(batchFileName)
     val goalMap = parseGoalFile(goalFileName)
     val constraintMap = mutable.HashMap.empty[Int, Double]
-    batchTimeMap.foreach(pair => {
+    goalMap.foreach(pair => {
       val qid = pair._1
-      val batchTime = pair._2
-      val goal = goalMap(qid)
+      val goal = pair._2
+      val batchTime = batchTimeMap(qid)
       constraintMap.put(qid, batchTime * goal)
     })
     constraintMap
@@ -62,14 +62,16 @@ object LatencyUtils {
   (mutable.HashMap[Int, String], mutable.HashMap[Int, Double]) = {
     val lines = Source.fromFile(fileName).getLines().map(_.trim).toArray
     val qidToLatencyMap = mutable.HashMap.empty[Int, Double]
-    var qidToApproachMap = mutable.HashMap.empty[Int, String]
+    val qidToApproachMap = mutable.HashMap.empty[Int, String]
     lines.foreach(line => {
-      val items = line.split("\\t")
-      val approach = items(1).trim
-      val qid = items(2).toInt
-      val latency = items(3).toDouble
-      qidToApproachMap.put(qid, approach)
-      qidToLatencyMap.put(qid, latency)
+      if (line.nonEmpty) {
+        val items = line.split("\\t")
+        val approach = items(1).trim
+        val qid = items(2).toInt
+        val latency = items(3).toDouble
+        qidToApproachMap.put(qid, approach)
+        qidToLatencyMap.put(qid, latency)
+      }
     })
 
     (qidToApproachMap, qidToLatencyMap)

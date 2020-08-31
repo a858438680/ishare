@@ -163,7 +163,7 @@ class TestSQP (bootstrap: String, shuffleNum: String, statDIR: String, SF: Doubl
   private val numSubQ = subQueries.length
   private val numBatches = queryConfig.numBatches
   private val queryNames = queryConfig.queryNames
-  private val constraints = queryConfig.constraints
+  private val constraints = queryConfig.constraintMap
   private val subQueryInfos = queryConfig.subQueryInfo
   private val schedulingOrder = queryConfig.schedulingOrder
   private val queryDependency = queryConfig.queryDependency
@@ -180,7 +180,7 @@ class TestSQP (bootstrap: String, shuffleNum: String, statDIR: String, SF: Doubl
     val subQuery = pair._1
     val idx = pair._2
     subQuery.initialize(queryNames(idx), idx.toString, numBatches(idx).toString,
-      constraints(idx), SF, tpchSchemas(idx))
+      "1.0", SF, tpchSchemas(idx))
   })
 
   private val isInQP = executionMode == ExecutionMode.InQP
@@ -188,6 +188,10 @@ class TestSQP (bootstrap: String, shuffleNum: String, statDIR: String, SF: Doubl
   private val serverThread =
     new ServerThread(numSubQ, port, queryNames, numBatches, schedulingOrder,
       queryDependency, subQueryInfos, subQueries, sparkConf, isInQP, this)
+
+  def getConstraints(): mutable.HashMap[Int, Double] = {
+    constraints
+  }
 
   private def createSharedTopics(): Unit = {
     shareTopics.foreach(shareTopic => {
@@ -395,6 +399,7 @@ class ServerThread (numSubQ: Int, port: Int,
     writeSubqueryInfo(statDir, executionModeStr, timestamp)
     writeLatencyInfo(statDir, executionModeStr, timestamp, rootQueries, latencyMap)
     writeAggInfo(statDir, executionModeStr, timestamp)
+    writeConfig(statDir)
   }
 
   private def writeSubqueryInfo(statDir: String,
@@ -467,6 +472,19 @@ class ServerThread (numSubQ: Int, port: Int,
 
     standaloneWriter.print("\n")
     standaloneWriter.close()
+  }
+
+  private def writeConfig(statDir: String): Unit = {
+    val configFile = statDir + "/goal.conf"
+    val goalWriter = new PrintWriter(new FileWriter(configFile, true))
+    val constriantMap = driver.getConstraints()
+    constriantMap.foreach(pair => {
+      val qid = pair._1
+      val constraint = pair._2
+      goalWriter.println(s"Q${qid},$qid,$constraint")
+    })
+    goalWriter.println("\n")
+    goalWriter.close()
   }
 
   private def writeAggInfo(statDir: String,

@@ -30,7 +30,7 @@ import org.apache.spark.sql.sqpmeta.{PredInfo, SubQueryInfo}
 
 case class QueryConfig (queryNames: Array[String],
                         numBatches: Array[Int],
-                        constraints: Array[String],
+                        constraintMap: mutable.HashMap[Int, Double],
                         subQueryInfo: Array[SubQueryInfo],
                         schedulingOrder: Array[Int],
                         queryDependency: mutable.HashMap[Int, mutable.HashSet[Int]],
@@ -473,7 +473,6 @@ object QueryGenerator {
 
   private def generateQueryConfig(queryGraph: QueryGraph): QueryConfig = {
     val numBatches = queryGraph.numBatches
-    val constraints = Array.fill[String](numBatches.length)("1.0")
     val queryDependency = queryGraph.queryDependency
     val subQueries = queryGraph.subQueries
     val schedulingOrder = queryGraph.schedulingOrder
@@ -492,6 +491,9 @@ object QueryGenerator {
       collectQueryInfo(subQuery, predInfoMap, aggCluster, isRoot)
       SubQueryInfo(qidSet.toArray, predInfoMap, aggCluster.toArray)
     })
+
+    val constraints = mutable.HashMap.empty[Int, Double]
+    queryGraph.qidToConstraints.foreach(pair => constraints.put(pair._1, pair._2))
 
     QueryConfig(queryNames, numBatches, constraints, subQueryInfo,
       schedulingOrder, queryDependency, shareTopics)
