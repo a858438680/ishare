@@ -56,7 +56,7 @@ class ServerThread (numSubQ: Int, port: Int,
       for (uid <- batchIDArray.indices) {
         val threshold = (batchIDArray(uid) + 1).toDouble/numBatchArray(uid).toDouble
         if (progress >= threshold) {
-          server.startOneExecution(uid)
+          server.startOneExecution(uid, true)
           executed(uid) = true
           batchIDArray(uid) += 1
         }

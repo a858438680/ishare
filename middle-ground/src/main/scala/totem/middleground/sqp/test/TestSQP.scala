@@ -48,7 +48,7 @@ object TestSQP {
         "[Path to kafka topics command] " +
         "[Zookeeper address]" +
         "[Path to hdfs command]" +
-        "[Execution mode: 0 - NoShare, 1 - BatchShare, 2 - SQPShare]" +
+        "[Execution mode: 0 - NoShare, 1 - BatchShare, 2 - SQPShare, 3 - InQP]" +
         "[Enable Unshare: True or False]" +
         "[DF directory]" +
         "[Config file]" +
@@ -69,7 +69,9 @@ object TestSQP {
     val executionMode =
       if (args(9).compareTo("0") == 0) ExecutionMode.NoShare
       else if (args(9).compareTo("1") == 0) ExecutionMode.BatchShare
-      else ExecutionMode.SQPShare
+      else if (args(9).compareTo("2") == 0) ExecutionMode.SQPShare
+      else ExecutionMode.InQP
+
     val enableUnShare =
       if (args(10).toLowerCase.compareTo("true") == 0) true
       else false
@@ -110,8 +112,10 @@ object TestSQP {
         Optimizer.OptimizeUsingBatchMQO(queryGraph)
       } else if (executionMode == ExecutionMode.SQPShare) {
         Optimizer.OptimizeUsingSQP(queryGraph, enableUnShare)
+      } else if (executionMode == ExecutionMode.InQP) {
+        Optimizer.OptimizeWithInQP(queryGraph)
       } else { // No Sharing
-        Optimizer.OptimizedWithoutSharing(queryGraph)
+        Optimizer.OptimizeWithoutSharing(queryGraph)
       }
     val optTime = (System.nanoTime() - start)/1000000
     Utils.printPaceConfig(optimizedGraph)
@@ -133,10 +137,12 @@ class TestSQP (bootstrap: String, shuffleNum: String, statDIR: String, SF: Doubl
     println("No Shared Execution")
   } else if (executionMode == ExecutionMode.BatchShare) {
     println("Shared Execution using Batch Optimizer")
-  } else if (enableUnShare) {
+  } else if (executionMode == ExecutionMode.SQPShare && enableUnShare) {
     println("Shared Execution of iShare(True)")
-  } else {
+  } else if (executionMode == ExecutionMode.SQPShare && !enableUnShare) {
     println("Shared Execution of iShare(False)")
+  } else {
+    println("No Shared Execution with InQP")
   }
 
   DataUtils.bootstrap = bootstrap
@@ -177,9 +183,11 @@ class TestSQP (bootstrap: String, shuffleNum: String, statDIR: String, SF: Doubl
       constraints(idx), SF, tpchSchemas(idx))
   })
 
+  private val isInQP = executionMode == ExecutionMode.InQP
+
   private val serverThread =
     new ServerThread(numSubQ, port, queryNames, numBatches, schedulingOrder,
-      queryDependency, subQueryInfos, subQueries, sparkConf, this)
+      queryDependency, subQueryInfos, subQueries, sparkConf, isInQP, this)
 
   private def createSharedTopics(): Unit = {
     shareTopics.foreach(shareTopic => {
@@ -213,7 +221,9 @@ class TestSQP (bootstrap: String, shuffleNum: String, statDIR: String, SF: Doubl
   }
 
   def startQueries(): Unit = {
-    if (executionMode != ExecutionMode.NoShare) {
+    if (executionMode == ExecutionMode.BatchShare ||
+      executionMode == ExecutionMode.SQPShare ||
+      executionMode == ExecutionMode.InQP) {
       createSharedTopics()
     }
 
@@ -230,14 +240,18 @@ class TestSQP (bootstrap: String, shuffleNum: String, statDIR: String, SF: Doubl
       } else executionMode.toString
     serverThread.reportStats(statDIR, execStr)
 
-    if (executionMode != ExecutionMode.NoShare) {
+    if (executionMode == ExecutionMode.BatchShare ||
+      executionMode == ExecutionMode.SQPShare ||
+      executionMode == ExecutionMode.InQP) {
       deleteSharedTopics()
       clearCheckpoint()
     }
   }
 
   def failCleanup(): Unit = {
-     if (executionMode != ExecutionMode.NoShare) {
+     if (executionMode == ExecutionMode.BatchShare ||
+         executionMode == ExecutionMode.SQPShare ||
+         executionMode == ExecutionMode.InQP) {
       deleteSharedTopics()
       clearCheckpoint()
     }
@@ -251,6 +265,7 @@ object ExecutionMode extends Enumeration {
   val NoShare: ExecutionMode.Value = Value("NoShare")
   val BatchShare: ExecutionMode.Value = Value("BatchShare")
   val SQPShare: ExecutionMode.Value = Value("SQPShare")
+  val InQP: ExecutionMode.Value = Value("InQP")
 }
 
 class ServerThread (numSubQ: Int, port: Int,
@@ -261,6 +276,7 @@ class ServerThread (numSubQ: Int, port: Int,
                     queryInfo: Array[SubQueryInfo],
                     subqueries: Array[TPCHQuery],
                     sparkConf: SparkConf,
+                    isInQP: Boolean,
                     driver: TestSQP) extends Thread {
 
   private val server = new MetaServer(numSubQ, port)
@@ -273,6 +289,7 @@ class ServerThread (numSubQ: Int, port: Int,
   private val batchNumForScheduling = Array.fill[Int](numBatchArray.length)(1)
   private val progressSimulator =
     new ProgressSimulator(maxBatchNum, batchNumForScheduling, dependency)
+  private val parentDep = Optimizer.fromQueryDepToParentDep(dependency)
 
   server.loadSharedQueryInfo(queryInfo)
 
@@ -299,8 +316,28 @@ class ServerThread (numSubQ: Int, port: Int,
         subqueries(uid).start()
         server.startOneQuery()
 
-        for (curStep <- 0 until numBatchArray(uid)) {
-          server.startOneExecution(uid)
+        val parentBatchNum =
+          if (!isInQP || parentDep(uid).isEmpty) -1
+          else {
+            val parentUid = parentDep(uid).max
+            numBatchArray(parentUid)
+          }
+
+        val numBatch = numBatchArray(uid)
+        var parentStep = 0
+        for (curStep <- 0 until numBatch) {
+
+          val repair =
+            if (isInQP) {
+              val curProgress = (curStep + 1).toDouble/numBatch.toDouble
+              val parentProgress = (parentStep + 1).toDouble/parentBatchNum.toDouble
+              if (curProgress >= parentProgress) {
+                parentStep += 1
+                true
+              } else false
+            } else true
+
+          server.startOneExecution(uid, repair)
           val msg = server.getStatMessage(uid)
           // clean up here
           if (msg.batchID == -1) {

@@ -23,7 +23,6 @@ import java.io.{FileWriter, PrintWriter}
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
-import scala.io.Source
 import scala.util.Random
 
 import totem.middleground.sqp.Utils
@@ -33,6 +32,7 @@ object TestScheduleForConstraint {
   def main(args: Array[String]): Unit = {
 
     import ScheduleUtils._
+    import LatencyUtils._
 
     if (args.length < 6) {
       System.err.println(
@@ -146,39 +146,5 @@ object TestScheduleForConstraint {
     val maxPerMiss = missedPercentage.max
     val minPerMiss = missedPercentage.min
     (avgMiss, minMiss, maxMiss, avgPerMiss, minPerMiss, maxPerMiss)
-  }
-
-  private def getConstraints(batchFileName: String,
-                             goalFileName: String): mutable.HashMap[Int, Double] = {
-    val batchTimeMap = parseBatchTimeFile(batchFileName)
-    val goalMap = parseGoalFile(goalFileName)
-    val constraintMap = mutable.HashMap.empty[Int, Double]
-    batchTimeMap.foreach(pair => {
-      val qid = pair._1
-      val batchTime = pair._2
-      val goal = goalMap(qid)
-      constraintMap.put(qid, batchTime * goal)
-    })
-    constraintMap
-  }
-
-  private def parseBatchTimeFile(fileName: String): mutable.HashMap[Int, Double] = {
-    val lines = Source.fromFile(fileName).getLines().map(_.trim).toArray
-    val batchTimeMap = mutable.HashMap.empty[Int, Double]
-    lines.foreach(line => {
-      val items = line.split(",")
-      batchTimeMap.put(items(0).trim.toInt, items(1).trim.toDouble)
-    })
-    batchTimeMap
-  }
-
-  private def parseGoalFile(fileName: String): mutable.HashMap[Int, Double] = {
-    val lines = Source.fromFile(fileName).getLines().map(_.trim).toArray
-    val goalMap = mutable.HashMap.empty[Int, Double]
-    lines.foreach(line => {
-      val items = line.split(",")
-      goalMap.put(items(1).trim.toInt, items(2).trim.toDouble)
-    })
-    goalMap
   }
 }

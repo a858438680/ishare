@@ -43,7 +43,7 @@ object TestDFGenerator {
 
   private def testDFGenerator(dir: String, configName: String): Unit = {
     val queryGraph = Utils.getParsedQueryGraph(dir, configName)
-    val newQueryGraph = Optimizer.OptimizeUsingSQP(queryGraph, true)
+    val newQueryGraph = Optimizer.OptimizeWithInQP(queryGraph)
 
     Utils.printQueryGraph(newQueryGraph)
     QueryGenerator.printSubQueryProgram(newQueryGraph)

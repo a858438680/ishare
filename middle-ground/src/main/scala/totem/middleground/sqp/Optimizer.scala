@@ -36,7 +36,7 @@ object SubsumeState extends Enumeration {
 
 object Optimizer {
 
-  val dummyOperator = genDummyOperator()
+  val dummyOperator: PlanOperator = genDummyOperator()
 
   val finalWorkRatio = 1.0
 
@@ -51,8 +51,9 @@ object Optimizer {
     val queryGraphWithPerOPFinalWork = getPerOPFinalWork(queryGraph, batchFinalWork)
     val queryGraphWithMQO = batchMQO(queryGraphWithPerOPFinalWork)
     val queryGraphWithSubqueries = findSubQueries(queryGraphWithMQO)
+    val isInQP = false
     val queryGraphWithPace =
-      decideExecutionPace(queryGraphWithSubqueries, batchFinalWork, nonUniform)
+      decideExecutionPace(queryGraphWithSubqueries, batchFinalWork, nonUniform, isInQP)
     if (enableUnshare) {
       UnshareMQO(queryGraphWithPace, batchFinalWork)
     }
@@ -61,16 +62,27 @@ object Optimizer {
 
   def OptimizeUsingBatchMQO(queryGraph: QueryGraph): QueryGraph = {
     val nonUniform = false
+    val isInQP = false
     val batchFinalWork = getAllBatchFinalWork(queryGraph)
     val queryGraphWithSubqueries = findSubQueries(batchMQO(queryGraph))
-    decideExecutionPace(queryGraphWithSubqueries, batchFinalWork, nonUniform)
+    decideExecutionPace(queryGraphWithSubqueries, batchFinalWork, nonUniform, isInQP)
   }
 
-  def OptimizedWithoutSharing(queryGraph: QueryGraph): QueryGraph = {
+  def OptimizeWithoutSharing(queryGraph: QueryGraph): QueryGraph = {
     val nonUniform = false
+    val isInQP = false
     val batchFinalWork = getAllBatchFinalWork(queryGraph)
     val queryGraphWithSubqueries = findSubQueries(queryGraph)
-    decideExecutionPace(queryGraphWithSubqueries, batchFinalWork, nonUniform)
+    decideExecutionPace(queryGraphWithSubqueries, batchFinalWork, nonUniform, isInQP)
+  }
+
+  def OptimizeWithInQP(queryGraph: QueryGraph): QueryGraph = {
+    val nonUniform = true
+    val isInQP = true
+    val batchFinalWork = getAllBatchFinalWork(queryGraph)
+    val queryWithAnnotatedBlockingOP = breakSingleQueryIntoSubqueries(queryGraph)
+    val queryGraphWithSubqueries = findSubQueries(queryWithAnnotatedBlockingOP)
+    decideExecutionPace(queryGraphWithSubqueries, batchFinalWork, nonUniform, isInQP)
   }
 
   def testOptimizerWithSQP(queryGraph: QueryGraph): (Double, Double) = {
@@ -79,22 +91,24 @@ object Optimizer {
 
   def testOptimizerWithBatchMQO(queryGraph: QueryGraph): Double = {
     val nonUniform = false
+    val isInQP = false
     val batchFinalWork = getAllBatchFinalWork(queryGraph)
     val queryGraphWithSubqueries = findSubQueries(batchMQO(queryGraph))
 
     val start = System.nanoTime()
-    decideExecutionPace(queryGraphWithSubqueries, batchFinalWork, nonUniform)
+    decideExecutionPace(queryGraphWithSubqueries, batchFinalWork, nonUniform, isInQP)
     val optTime = (System.nanoTime() - start)/1000000
     optTime
   }
 
   def testOptimizerWithoutSharing(queryGraph: QueryGraph): Double = {
     val nonUniform = false
+    val isInQP = false
     val batchFinalWork = getAllBatchFinalWork(queryGraph)
     val queryGraphWithSubqueries = findSubQueries(queryGraph)
 
     val start = System.nanoTime()
-    decideExecutionPace(queryGraphWithSubqueries, batchFinalWork, nonUniform)
+    decideExecutionPace(queryGraphWithSubqueries, batchFinalWork, nonUniform, isInQP)
     val optTime = (System.nanoTime() - start)/1000000
     optTime
   }
@@ -157,6 +171,33 @@ object Optimizer {
     cluster.add(newSet)
 
     op.childOps.foreach(getMultiQueryClusterHelper(_, cluster))
+  }
+
+  private def breakSingleQueryIntoSubqueries(queryGraph: QueryGraph): QueryGraph = {
+    queryGraph.qidToQuery.foreach(pair =>
+      annotateBlockingOperator(pair._2, dummyOperator, false))
+    queryGraph
+  }
+
+  private def annotateBlockingOperator(op: PlanOperator,
+                                       parent: PlanOperator,
+                                       metAgg: Boolean): Unit = {
+    var isMetAgg = metAgg
+    op match {
+      case _: AggOperator =>
+        assert(op.parentOps.length == 1)
+        if (isMetAgg) {
+          val newParentOps = op.parentOps ++ Array(dummyOperator)
+          op.parentOps = newParentOps
+        } else {
+          isMetAgg = true
+        }
+      case _: JoinOperator =>
+        isMetAgg = true
+      case _ =>
+    }
+
+    op.childOps.foreach(annotateBlockingOperator(_, op, isMetAgg))
   }
 
   private def findSubQueries(queryGraph: QueryGraph): QueryGraph = {
@@ -227,8 +268,11 @@ object Optimizer {
       val cacheManagers = Array(SubQueryCacheManager(0, null, null, false))
       val collectPerOPFinalWork = true
       val collectPerOPCardMap = false
+      val isInQP = false
+      val parentDependency = mutable.HashMap.empty[Int, mutable.HashSet[Int]]
       CostEstimater.estimatePlanGraphCost(subQueries, cacheManagers, batchNums,
-        execOrder, queryDependency, collectPerOPFinalWork, collectPerOPCardMap)
+        execOrder, queryDependency, parentDependency, collectPerOPFinalWork,
+        collectPerOPCardMap, isInQP)
     })
 
     graphWithBatchNum
@@ -242,20 +286,24 @@ object Optimizer {
     val cacheManagers = Array(SubQueryCacheManager(0, null, null, false))
     val collectPerOPFinalWork = false
     val collectPerOPCardMap = false
+    val isInQP = false
+    val parentDep = mutable.HashMap.empty[Int, mutable.HashSet[Int]]
     CostEstimater.estimatePlanGraphCost(subQueries, cacheManagers,
-      batchNums, execOrder, queryDependency, collectPerOPFinalWork, collectPerOPCardMap)._1
+      batchNums, execOrder, queryDependency, parentDep,
+      collectPerOPFinalWork, collectPerOPCardMap, isInQP)._1
   }
 
   private def decideExecutionPace(queryGraph: QueryGraph,
                                   batchFinalWork: mutable.HashMap[Int, Double],
-                                  nonUniform: Boolean): QueryGraph = {
+                                  nonUniform: Boolean,
+                                  isInQP: Boolean): QueryGraph = {
     var totalTime: Long = 0L
 
     val start = System.nanoTime()
 
     val retQueryGraph =
       if (nonUniform) {
-        decideNonUniformPace(queryGraph, batchFinalWork, new Array[Int](0))
+        decideNonUniformPace(queryGraph, batchFinalWork, new Array[Int](0), isInQP)
       } else {
         decideUniformPace(queryGraph, batchFinalWork)
       }
@@ -289,6 +337,8 @@ object Optimizer {
 
     val collectPerOPFinalWork = false
     val collectPerOPCardMap = false
+    val isInQP = false
+    val parentDep = mutable.HashMap.empty[Int, mutable.HashSet[Int]]
 
     cluster.foreach(qidCluster => {
       for (idx <- 0 until numSubQ) newBatchNums(idx) = 0
@@ -303,8 +353,9 @@ object Optimizer {
         })
 
         val (_, finalWork) =
-          CostEstimater.estimatePlanGraphCost(subQueries, cacheManagers,
-            newBatchNums, execOrder, queryDependency, collectPerOPFinalWork, collectPerOPCardMap)
+          CostEstimater.estimatePlanGraphCost(subQueries,
+            cacheManagers, newBatchNums, execOrder, queryDependency, parentDep,
+            collectPerOPFinalWork, collectPerOPCardMap, isInQP)
         val qidToFinalWork =
           CostEstimater.buildQidFinalWork(qidToUids, finalWork)
 
@@ -346,7 +397,8 @@ object Optimizer {
 
   private def decideNonUniformPace(queryGraph: QueryGraph,
                                    batchFinalWork: mutable.HashMap[Int, Double],
-                                   cacheBatchNum: Array[Int]):
+                                   cacheBatchNum: Array[Int],
+                                   isInQP: Boolean):
   QueryGraph = {
     val subQueries = queryGraph.subQueries
     val numSubQ = subQueries.length
@@ -368,7 +420,10 @@ object Optimizer {
     for (uid <- 0 until numSubQ) {
       val uidArray = findChildUidArray(uid, queryDependency)
       val cacheMap = mutable.HashMap.empty[String, CachedCostInfo]
-      cacheManagers(uid) = SubQueryCacheManager(uid, uidArray, cacheMap, true)
+      val useCache =
+        if (isInQP) false
+        else true
+      cacheManagers(uid) = SubQueryCacheManager(uid, uidArray, cacheMap, useCache)
     }
 
     val useCachedBatchnum = cacheBatchNum.length == numSubQ
@@ -401,8 +456,8 @@ object Optimizer {
       while (!finish) {
 
         val (_, finalWork) =
-          CostEstimater.estimatePlanGraphCost(subQueries, cacheManagers,
-            curBatchNum, execOrder, queryDependency, collectPerOPFinalWork, collectPerOPCardMap)
+          CostEstimater.estimatePlanGraphCost(subQueries, cacheManagers, curBatchNum, execOrder,
+            queryDependency, parentDep, collectPerOPFinalWork, collectPerOPCardMap, isInQP)
         val qidToFinalWork =
           CostEstimater.buildQidFinalWork(qidToUids, finalWork)
 
@@ -427,8 +482,8 @@ object Optimizer {
           val candSet = findUidCandidates(curBatchNum, uidCluster, parentDep)
           val realCandSet = candSet.intersect(activeUidSet)
           if (realCandSet.nonEmpty) {
-            val pair = decreaseBatchNum(curBatchNum, realCandSet,
-              subQueries, cacheManagers, execOrder, queryDependency)
+            val pair = decreaseBatchNum(curBatchNum, realCandSet, subQueries, cacheManagers,
+              execOrder, queryDependency, parentDep, isInQP)
             curBatchNum = pair._1
             lastDecBatchUid = pair._2
           } else {
@@ -542,7 +597,7 @@ object Optimizer {
     uidBuf.toArray
   }
 
-  private def fromQueryDepToParentDep(
+  def fromQueryDepToParentDep(
               queryDependency: mutable.HashMap[Int, mutable.HashSet[Int]]):
   mutable.HashMap[Int, mutable.HashSet[Int]] = {
     val parentDep = mutable.HashMap.empty[Int, mutable.HashSet[Int]]
@@ -571,13 +626,15 @@ object Optimizer {
                                subQueries: Array[PlanOperator],
                                cacheManagers: Array[SubQueryCacheManager],
                                execOrder: Array[Int],
-                               queryDependency: mutable.HashMap[Int, mutable.HashSet[Int]]):
+                               queryDependency: mutable.HashMap[Int, mutable.HashSet[Int]],
+                               parentDependency: mutable.HashMap[Int, mutable.HashSet[Int]],
+                               isInQP: Boolean):
   (Array[Int], Int) = {
 
     val uidToDec =
       candUidSet.map(uid => {
         (uid, computeIncrementability(curBatchNum, uid, subQueries,
-          cacheManagers, execOrder, queryDependency))
+          cacheManagers, execOrder, queryDependency, parentDependency, isInQP))
       }).foldRight((-1, Double.MaxValue))((A, B) => {
         if (A._2 < B._2) A
         else B
@@ -594,18 +651,20 @@ object Optimizer {
               subQueries: Array[PlanOperator],
               cacheManagers: Array[SubQueryCacheManager],
               execOrder: Array[Int],
-              queryDependency: mutable.HashMap[Int, mutable.HashSet[Int]]): Double = {
+              queryDependency: mutable.HashMap[Int, mutable.HashSet[Int]],
+              parentDependency: mutable.HashMap[Int, mutable.HashSet[Int]],
+              isInQP: Boolean): Double = {
     val collectPerOPFinalWork = false
     val collectPerOPCardMap = false
 
     val (oldTotalWork, oldFinalWork) =
-      CostEstimater.estimatePlanGraphCost(subQueries, cacheManagers,
-        curBatchNum, execOrder, queryDependency, collectPerOPFinalWork, collectPerOPCardMap)
+      CostEstimater.estimatePlanGraphCost(subQueries, cacheManagers, curBatchNum, execOrder,
+        queryDependency, parentDependency, collectPerOPFinalWork, collectPerOPCardMap, isInQP)
 
     curBatchNum(uid) -= 1
     val (newTotalWork, newFinalWork) =
-      CostEstimater.estimatePlanGraphCost(subQueries, cacheManagers,
-        curBatchNum, execOrder, queryDependency, collectPerOPFinalWork, collectPerOPCardMap)
+      CostEstimater.estimatePlanGraphCost(subQueries, cacheManagers, curBatchNum, execOrder,
+        queryDependency, parentDependency, collectPerOPFinalWork, collectPerOPCardMap, isInQP)
     curBatchNum(uid) += 1
 
     val totalDiff = oldTotalWork - newTotalWork
@@ -615,7 +674,28 @@ object Optimizer {
       newOne - oldOne
     }).sum
 
-    finalDiff/totalDiff
+    val incrementability = finalDiff/totalDiff
+
+    if (isInQP && !includesNonIncrementableOP(subQueries(uid), true)) {
+      incrementability + 1.0
+    } else {
+      incrementability
+    }
+  }
+
+  private def includesNonIncrementableOP(op: PlanOperator,
+                                         isSubQueryRoot: Boolean): Boolean = {
+    val isRoot = false
+    var include = false
+    op match {
+      case _: AggOperator if !isSubQueryRoot =>
+        include = true
+      case _ =>
+        op.childOps.foreach(child => {
+         include |= includesNonIncrementableOP(child, isRoot)
+        })
+    }
+    include
   }
 
   private def genClusters(fullQidSet: mutable.HashSet[Int],
@@ -783,7 +863,9 @@ object Optimizer {
     for (uid <- 0 until numSubQ) {
       cachedBatchNum(uid) = subQueryToBatchNum(subQueries(uid))
     }
-    decideNonUniformPace(queryGraph, batchFinalWork, cachedBatchNum)
+
+    val isInQP = false
+    decideNonUniformPace(queryGraph, batchFinalWork, cachedBatchNum, isInQP)
   }
 
   private def findRootSubQuery(node: PlanOperator): PlanOperator = {
@@ -932,8 +1014,11 @@ object Optimizer {
 
     val collectPerOPFinalWork = false
     val collectPerOPCardMap = true
+    val isInQP = false
+    val parentDependency = mutable.HashMap.empty[Int, mutable.HashSet[Int]]
     CostEstimater.estimatePlanGraphCost(subQueries, cacheManagers,
-      finalBatchNums, execOrder, queryDependency, collectPerOPFinalWork, collectPerOPCardMap)
+      finalBatchNums, execOrder, queryDependency, parentDependency,
+      collectPerOPFinalWork, collectPerOPCardMap, isInQP)
 
     queryGraph
   }

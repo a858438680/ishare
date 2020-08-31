@@ -521,7 +521,7 @@ class ServerThread (numSubQ: Int, port: Int,
 
       setArray.foreach(execSet => {
         execSet.foreach(uid => {
-          server.startOneExecution(uid)
+          server.startOneExecution(uid, true)
           val msg = server.getStatMessage(uid)
           totalTime(uid) += msg.execTime
           allTotalTime += msg.execTime

@@ -115,10 +115,11 @@ object CostEstimater {
                             batchNums: Array[Int],
                             execOrder: Array[Int],
                             queryDependency: mutable.HashMap[Int, mutable.HashSet[Int]],
+                            parentDependency: mutable.HashMap[Int, mutable.HashSet[Int]],
                             collectPerOPFinalWork: Boolean,
-                            collectPerOPCardMap: Boolean):
+                            collectPerOPCardMap: Boolean,
+                            isInQP: Boolean):
   (Double, Array[Double]) = {
-
 
     val numSubQ = subQueries.length
     val totalWork = new Array[Double](numSubQ)
@@ -144,11 +145,18 @@ object CostEstimater {
 
         case None =>
           val batchNum = batchNums(uid)
+          val parentBatchNum =
+            if (!isInQP || parentDependency(uid).isEmpty) -1
+            else {
+              val parentUid = parentDependency(uid).max
+              batchNums(parentUid)
+            }
+
           for (batchId <- 0 until batchNum) {
-            val collectFinalBatch = (batchId == batchNum - 1 && collectPerOPFinalWork)
+            val collectFinalBatch = batchId == batchNum - 1 && collectPerOPFinalWork
             val oneExecWork =
-              estimateOneExecutionCost(subQueries(uid), batchNum, uid,
-                collectFinalBatch, collectPerOPCardMap)
+              estimateOneExecutionCost(subQueries(uid), batchNum, parentBatchNum, uid,
+                collectFinalBatch, collectPerOPCardMap, isInQP)
             totalWork(uid) += oneExecWork
             totalWorkSum += oneExecWork
             if (batchId == batchNum - 1) {
@@ -190,22 +198,26 @@ object CostEstimater {
 
   private def estimateOneExecutionCost(subQuery: PlanOperator,
                                        batchNum: Int,
+                                       parentBatchNum: Int,
                                        uid: Int,
                                        collectFinalBatch: Boolean,
-                                       collectPerOPCardMap: Boolean): Double = {
+                                       collectPerOPCardMap: Boolean,
+                                       isInQP: Boolean): Double = {
     val isSubQueryRoot = true
     val qidSet = subQuery.getQidSet
-    incrementalCostHelper(subQuery, batchNum, uid, qidSet,
-      collectFinalBatch, collectPerOPCardMap, isSubQueryRoot).totalCost
+    incrementalCostHelper(subQuery, batchNum, parentBatchNum, uid, qidSet,
+      collectFinalBatch, collectPerOPCardMap, isSubQueryRoot, isInQP).totalCost
   }
 
   private def incrementalCostHelper(op: PlanOperator,
                                     batchNum: Int,
+                                    parentBatchNum: Int,
                                     uid: Int,
                                     subQueryQidSet: Array[Int],
                                     collectFinalBatch: Boolean,
                                     collectPerOPCardMap: Boolean,
-                                    isSubQueryRoot: Boolean): CostInfo = {
+                                    isSubQueryRoot: Boolean,
+                                    isInQP: Boolean): CostInfo = {
 
     if (op.parentOps.length > 1 && !isSubQueryRoot) { // A materialize operator
       val qidSet = fromArrayQidSet(op.getQidSet)
@@ -258,8 +270,8 @@ object CostEstimater {
 
         case projOP: ProjectOperator =>
           val costInfo =
-            incrementalCostHelper(projOP.childOps(0), batchNum, uid,
-              subQueryQidSet, collectFinalBatch, collectPerOPCardMap, isRoot)
+            incrementalCostHelper(projOP.childOps(0), batchNum, parentBatchNum, uid,
+              subQueryQidSet, collectFinalBatch, collectPerOPCardMap, isRoot, isInQP)
           filterByQidSet(projOP.getQidSet, costInfo)
           if (collectPerOPCardMap) collectInputCard(projOP, costInfo.cardMap, costInfo.delCardMap)
 
@@ -274,8 +286,8 @@ object CostEstimater {
 
         case selOP: SelectOperator =>
           val costInfo =
-            incrementalCostHelper(selOP.childOps(0), batchNum, uid,
-              subQueryQidSet, collectFinalBatch, collectPerOPCardMap, isRoot)
+            incrementalCostHelper(selOP.childOps(0), batchNum, parentBatchNum, uid,
+              subQueryQidSet, collectFinalBatch, collectPerOPCardMap, isRoot, isInQP)
           filterByQidSet(selOP.getQidSet, costInfo)
           if (collectPerOPCardMap) collectInputCard(selOP, costInfo.cardMap, costInfo.delCardMap)
 
@@ -301,8 +313,8 @@ object CostEstimater {
 
         case aggOP: AggOperator =>
           val costInfo =
-            incrementalCostHelper(aggOP.childOps(0), batchNum, uid,
-              subQueryQidSet, collectFinalBatch, collectPerOPCardMap, isRoot)
+            incrementalCostHelper(aggOP.childOps(0), batchNum, parentBatchNum, uid,
+              subQueryQidSet, collectFinalBatch, collectPerOPCardMap, isRoot, isInQP)
           filterByQidSet(aggOP.getQidSet, costInfo)
           if (collectPerOPCardMap) collectInputCard(aggOP, costInfo.cardMap, costInfo.delCardMap)
 
@@ -342,22 +354,39 @@ object CostEstimater {
               ((inputDelete/aggOP.stateSize) * aggOP.stateSize * math.log(aggOP.stateSize))
           }
 
-          val baseSize = inputInsert + inputDelete
-          val baseCost = baseSize * AGGREADCOST + aggStartupCost + additionalCost
-          costInfo.totalCost += getMatCost(baseCost, totalOutInsert + totalOutDelete, aggOP)
-          materialize(costInfo, aggOP, qidSet)
+          val repair =
+            if (isInQP) {
+              aggOP.curBatchIdx += 1
+              val curProgress = aggOP.curBatchIdx/batchNum.toDouble
+              val parentProgress = (aggOP.parentBatchIdx + 1)/parentBatchNum.toDouble
+              if (curProgress >= parentProgress) {
+                aggOP.parentBatchIdx += 1
+                true
+              } else false
+            } else true
 
-          if (collectFinalBatch) subQueryQidSet.foreach(aggOP.setFinalWork(_, baseCost))
+          if (!repair) {
+            val baseSize = inputInsert + inputDelete
+            val baseCost = baseSize * AGGREADCOST + aggStartupCost
+            costInfo.totalCost += baseCost
+          } else {
+            val baseSize = inputInsert + inputDelete
+            val baseCost = baseSize * AGGREADCOST + aggStartupCost + additionalCost
+            costInfo.totalCost += getMatCost(baseCost, totalOutInsert + totalOutDelete, aggOP)
+            materialize(costInfo, aggOP, qidSet)
+
+            if (collectFinalBatch) subQueryQidSet.foreach(aggOP.setFinalWork(_, baseCost))
+          }
 
           costInfo
 
         case joinOP: JoinOperator =>
           val innerCostInfo =
-            incrementalCostHelper(joinOP.childOps(Parser.INNER),
-              batchNum, uid, subQueryQidSet, collectFinalBatch, collectPerOPCardMap, isRoot)
+            incrementalCostHelper(joinOP.childOps(Parser.INNER), batchNum, parentBatchNum,
+              uid, subQueryQidSet, collectFinalBatch, collectPerOPCardMap, isRoot, isInQP)
           val outerCostInfo =
-            incrementalCostHelper(joinOP.childOps(Parser.OUTER),
-              batchNum, uid, subQueryQidSet, collectFinalBatch, collectPerOPCardMap, isRoot)
+            incrementalCostHelper(joinOP.childOps(Parser.OUTER), batchNum, parentBatchNum,
+              uid, subQueryQidSet, collectFinalBatch, collectPerOPCardMap, isRoot, isInQP)
           filterByQidSet(joinOP.getQidSet, innerCostInfo)
           filterByQidSet(joinOP.getQidSet, outerCostInfo)
           if (collectPerOPCardMap) {
@@ -397,8 +426,8 @@ object CostEstimater {
 
         case rootOP: RootOperator =>
           val costInfo =
-            incrementalCostHelper(rootOP.childOps(0), batchNum, uid,
-              subQueryQidSet, collectFinalBatch, collectPerOPCardMap, isRoot)
+            incrementalCostHelper(rootOP.childOps(0), batchNum, parentBatchNum, uid,
+              subQueryQidSet, collectFinalBatch, collectPerOPCardMap, isRoot, isInQP)
           costInfo.totalCost += rootStartupCost
           costInfo
 

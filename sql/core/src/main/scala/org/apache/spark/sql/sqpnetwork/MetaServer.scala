@@ -51,7 +51,7 @@ class MetaServer (numSubQ: Int, port: Int) {
       socketArray(uid) = socket
       inputStreamArray(uid) = inputStream
       outputStreamArray(uid) = outputStream
-      execMessageArray(uid) = new ExecMessage(uid, false)
+      execMessageArray(uid) = new ExecMessage(uid, false, false)
 
       val planMessage = new PlanMessage(uid, baseQuery = true)
       planMessage.setSubQInfo(queryInfo(uid))
@@ -72,19 +72,20 @@ class MetaServer (numSubQ: Int, port: Int) {
     socketArray(uid) = socket
     inputStreamArray(uid) = inputStream
     outputStreamArray(uid) = outputStream
-    execMessageArray(uid) = new ExecMessage(uid, false)
+    execMessageArray(uid) = ExecMessage(uid, false, true)
 
     val planMessage = new PlanMessage(uid, baseQuery = true)
     planMessage.setSubQInfo(queryInfo(uid))
     writePlanMessage(outputStream, planMessage)
   }
 
-  def startOneExecution(uid: Int): Unit = {
-    outputStreamArray(uid).writeObject(execMessageArray(uid))
+  def startOneExecution(uid: Int, repair: Boolean): Unit = {
+    val msg = ExecMessage(uid, false, repair)
+    outputStreamArray(uid).writeObject(msg)
   }
 
   def terminateQuery(uid: Int): Unit = {
-    outputStreamArray(uid).writeObject(new ExecMessage(uid, true))
+    outputStreamArray(uid).writeObject(new ExecMessage(uid, true, true))
   }
 
   def getStatMessage(uid: Int): StatMessage = {

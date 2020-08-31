@@ -379,6 +379,8 @@ class AggOperator (qidSet: Array[Int],
   extends PlanOperator(qidSet, outputAttrs, referenceAttrs, aliasAttrs, dfStr) {
 
   var stateSize = 0.0
+  var curBatchIdx = 0.0
+  var parentBatchIdx = 0.0
 
   override def toString: String = {
     val qidSetStr = Utils.qidSetToString(internalQidSet)
@@ -407,6 +409,8 @@ class AggOperator (qidSet: Array[Int],
   override def resetCostInfo(): Unit = {
     super.basicResetCostInfo()
     stateSize = 0.0
+    curBatchIdx = 0.0
+    parentBatchIdx = 0.0
   }
 
   def getGroupByAttrs: mutable.HashSet[String] = groupByAttrs

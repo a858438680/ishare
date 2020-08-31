@@ -35,7 +35,9 @@ class PlanMessage (override val uid: Int, val baseQuery: Boolean)
   }
 }
 
-class ExecMessage (override val uid: Int, val terminate: Boolean)
+case class ExecMessage (override val uid: Int,
+                        val terminate: Boolean,
+                        var repair: Boolean)
   extends MetaMessage (uid) {}
 
 class StatMessage (override val uid: Int)

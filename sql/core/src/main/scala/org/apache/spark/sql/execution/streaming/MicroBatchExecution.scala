@@ -89,6 +89,9 @@ class MicroBatchExecution(
   // SQP: SubQueryInfo
   var subQueryInfo: SubQueryInfo = null
 
+  // For InQP in SQP
+  var repair: Boolean = true
+
   override lazy val logicalPlan: LogicalPlan = {
     assert(queryExecutionThread eq Thread.currentThread,
       "logicalPlan must be initialized in QueryExecutionThread " +
@@ -245,6 +248,7 @@ class MicroBatchExecution(
 
       if (enable_slothdb) {
         val execMessage = client.getExecMessage()
+        repair = execMessage.repair
         if (execMessage.terminate) {
           client.stopClient()
           stop()
@@ -678,6 +682,7 @@ class MicroBatchExecution(
       if (SlothDBContext.enable_slothdb) {
         lastExecution.slothdbOptimization(runId, this, totalBatchNum)
         lastExecution.sqpOptimization(subQueryInfo)
+        lastExecution.setRepairMode(lastExecution.executedPlan, repair)
         // if (execution_mode == INCAWARE_SUBPLAN ||
         //     execution_mode == INCAWARE_PATH ||
         //     execution_mode == INCOBLIVIOUS) {

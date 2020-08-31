@@ -130,8 +130,8 @@ object ScheduleUtils {
   }
 
   def computeQueryLatency(latencyArray: Array[Double],
-                                  dependency: mutable.HashMap[Int, mutable.HashSet[Int]],
-                                  schedulingOrder: Array[Int])
+                          dependency: mutable.HashMap[Int, mutable.HashSet[Int]],
+                          schedulingOrder: Array[Int])
   : Array[Double] = {
     val rootQueries = schedulingOrder
     val uidQueue = mutable.Queue.empty[Int]
