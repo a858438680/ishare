@@ -159,7 +159,7 @@ object ScheduleUtils {
     rootQueries
   }
 
-  private def getQid(queryName: String): Int = {
+  def getQid(queryName: String): Int = {
     val idx = queryName.indexOf("_")
     queryName.substring(idx + 1).toInt
   }

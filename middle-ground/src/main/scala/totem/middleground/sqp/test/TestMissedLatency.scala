@@ -21,6 +21,9 @@ package totem.middleground.sqp.test
 
 import java.io.{FileWriter, PrintWriter}
 
+import scala.collection.mutable
+import scala.io.Source
+
 object TestMissedLatency {
 
   def main(args: Array[String]): Unit = {
@@ -28,16 +31,19 @@ object TestMissedLatency {
     import LatencyUtils._
     import totem.middleground.sqp.Utils
 
-    if (args.length < 4) {
+    if (args.length < 5) {
       System.err.println(
         "Usage: TestMissedLatency [Batchtime] [Goal Configuration File] " +
-          "[Standalone Latency] [statDir]")
+          "[Standalone Latency] [SubQuery File] [statDir]")
       System.exit(1)
     }
 
-    val statDir = args(3)
+    val subQueryFile = args(3)
+    val statDir = args(4)
     val constraintMap = getConstraints(args(0), args(1))
     val (approachMap, latencyMap) = parseQueryStandaloneLatencyFile(args(2))
+
+    val (batchNumArray, qidToUids) = parseSubQueryBatchNumFile(subQueryFile)
 
     val missAbsFile = statDir + "/missAbs.stat"
     val missPerFile = statDir + "/missPer.stat"
@@ -52,8 +58,10 @@ object TestMissedLatency {
       val approach = approachMap(qid)
       val constraint = constraintMap(qid)
 
-      val missAbs = math.max(0, latency - constraint)
-      val missPer = math.max(0, (latency - constraint)/constraint)
+      val overhead = computeStartupOverhead(qid, qidToUids, batchNumArray)
+
+      val missAbs = math.max(0, latency - overhead - constraint)
+      val missPer = math.max(0, (latency - overhead - constraint)/constraint)
 
       val absOutputStr = s"$timestamp\t$approach\t$qid\t$missAbs"
       val perOutputStr = s"$timestamp\t$approach\t$qid\t$missPer"
@@ -64,6 +72,56 @@ object TestMissedLatency {
 
     absWriter.close()
     perWriter.close()
+  }
+
+  val startUpCost = 2500.0
+  def computeStartupOverhead(qid: Int,
+                             qidToUid: mutable.HashMap[Int, mutable.HashSet[Int]],
+                             batchNumArray: Array[Int]): Double = {
+    var overhead = 0.0
+    qidToUid(qid).foreach(uid => {
+      if (batchNumArray(uid) == 1) overhead += startUpCost
+    })
+    overhead
+  }
+
+  def parseSubQueryBatchNumFile(fileName: String):
+  (Array[Int], mutable.HashMap[Int, mutable.HashSet[Int]]) = {
+
+    val lines = Source.fromFile(fileName).getLines().map(_.trim).toArray
+    val uidToBatchNumMap = mutable.HashMap.empty[Int, Int]
+    val qidToUids = mutable.HashMap.empty[Int, mutable.HashSet[Int]]
+    lines.foreach(line => {
+      if (line.nonEmpty) {
+        val items = line.split("\\t")
+        val uid = items(2).toInt
+        uidToBatchNumMap.put(uid, items(4).toInt)
+        getQids(items(3)).foreach(qid => {
+          val uidSet = qidToUids.getOrElseUpdate(qid, mutable.HashSet.empty[Int])
+          uidSet.add(uid)
+        })
+      }
+    })
+    val batchNumArray = new Array[Int](uidToBatchNumMap.size)
+    uidToBatchNumMap.foreach(pair => {
+      val uid = pair._1
+      val batchNum = pair._2
+      batchNumArray(uid) = batchNum
+    })
+
+    (batchNumArray, qidToUids)
+  }
+
+  def getQids(queryName: String): mutable.HashSet[Int] = {
+    val idx = queryName.indexOf("_")
+    val qidString = queryName.substring(idx + 1)
+
+    val qidSet = mutable.HashSet.empty[Int]
+    qidString.split("_").foreach(qidStr => {
+      qidSet.add(qidStr.toInt)
+    })
+
+    qidSet
   }
 
 }
