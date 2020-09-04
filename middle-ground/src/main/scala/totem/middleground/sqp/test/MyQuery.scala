@@ -1147,3 +1147,59 @@ sum_disc_price($"l_extendedprice", $"l_discount").as("total_revenue"))
 
     }
 }
+
+private class Q0_2 extends TPCHQuery {
+
+private val Q1_2 = new StructType()
+.add("min_supplycost", "double")
+.add("min_partkey", "double")
+
+
+
+    override def execQuery(spark: SparkSession, tpchSchema: TPCHSchema): Unit = {
+
+import spark.implicits._
+
+
+val result = ((((DataUtils.loadStreamTable(spark, "region", "r", tpchSchema)
+.filter($"r_name" === "EUROPE"))
+.join(DataUtils.loadStreamTable(spark, "nation", "n", tpchSchema), $"r_regionkey" === $"n_regionkey", "inner"))
+.join(DataUtils.loadStreamTable(spark, "supplier", "s", tpchSchema), $"n_nationkey" === $"s_nationkey", "inner"))
+.join((DataUtils.loadStreamTable(spark, "partsupp", "ps", tpchSchema))
+.join(DataUtils.loadStreamTable(spark, "part", "p", tpchSchema)
+.filter(($"p_size" === 15) and ($"p_type" like ("%BRASS"))), $"ps_partkey" === $"p_partkey", "inner"), $"s_suppkey" === $"ps_suppkey", "inner"))
+.join(loadSharedTable(spark, "Q1_2", Q1_2), ($"p_partkey" === $"min_partkey") and  ($"ps_supplycost" === $"min_supplycost"), "inner")
+.select($"s_acctbal", $"s_name", $"n_name", $"p_partkey", $"p_mfgr", $"s_address", $"s_phone", $"s_comment")
+.select("*")
+ DataUtils.writeToSinkWithExtraOptions(
+   result, query_name, uid, numBatch, constraint)
+
+    }
+}
+
+
+private class Q1_2 extends TPCHQuery {
+
+
+
+    override def execQuery(spark: SparkSession, tpchSchema: TPCHSchema): Unit = {
+
+import spark.implicits._
+
+
+val result = (((DataUtils.loadStreamTable(spark, "region", "r", tpchSchema)
+.filter($"r_name" === "EUROPE"))
+.join(DataUtils.loadStreamTable(spark, "nation", "n", tpchSchema), $"r_regionkey" === $"n_regionkey", "inner"))
+.join(DataUtils.loadStreamTable(spark, "supplier", "s", tpchSchema), $"n_nationkey" === $"s_nationkey", "inner"))
+.join(DataUtils.loadStreamTable(spark, "partsupp", "ps", tpchSchema), $"s_suppkey" === $"ps_suppkey", "inner")
+.groupBy($"ps_partkey")
+.agg(
+min($"ps_supplycost").as("min_supplycost"))
+.select($"ps_partkey".as("min_partkey"), $"min_supplycost")
+.select($"min_supplycost", $"min_partkey")
+ DataUtils.writeToKafkaWithExtraOptions(
+    result, "Q1_2", query_name, uid,
+       numBatch, constraint, tpchSchema.checkpointLocation)
+
+    }
+}

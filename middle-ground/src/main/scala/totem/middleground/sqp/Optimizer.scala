@@ -174,8 +174,12 @@ object Optimizer {
   }
 
   private def breakSingleQueryIntoSubqueries(queryGraph: QueryGraph): QueryGraph = {
+
     queryGraph.qidToQuery.foreach(pair =>
-      annotateBlockingOperator(pair._2, dummyOperator, false))
+      if (pair._1 != 2 &&  pair._1 != 13) {
+        annotateBlockingOperator(pair._2, dummyOperator, false)
+      })
+
     queryGraph
   }
 
@@ -186,7 +190,7 @@ object Optimizer {
     op match {
       case _: AggOperator =>
         assert(op.parentOps.length == 1)
-        if (isMetAgg) {
+        if (isMetAgg && !parent.isInstanceOf[SelectOperator]) {
           val newParentOps = op.parentOps ++ Array(dummyOperator)
           op.parentOps = newParentOps
         } else {

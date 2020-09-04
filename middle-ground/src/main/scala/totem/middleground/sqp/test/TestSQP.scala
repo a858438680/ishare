@@ -37,7 +37,7 @@ object TestSQP {
 
   def main(args: Array[String]): Unit = {
 
-    if (args.length < 13) {
+    if (args.length < 14) {
       System.err.println("Usage: TestSQP " +
         "[Bootstrap-Servers]" +
         "[Number-shuffle-partition]" +
@@ -52,7 +52,8 @@ object TestSQP {
         "[Enable Unshare: True or False]" +
         "[DF directory]" +
         "[Config file]" +
-        "[Pred file]")
+        "[Pred file]" +
+        "[Max Batch Num]")
       System.exit(1)
     }
 
@@ -78,7 +79,9 @@ object TestSQP {
     val dfDir = args(11)
     val configFile = args(12)
     val predFile = args(13)
+    val maxBatchNum = args(14).toInt
 
+    Catalog.setMaxBatchNum(maxBatchNum)
     Optimizer.initializeOptimizer(predFile)
     val optimizedQueries = optimizeMultiQuery(dfDir, configFile, executionMode, enableUnShare)
 

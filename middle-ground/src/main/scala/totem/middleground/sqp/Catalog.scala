@@ -28,7 +28,7 @@ object Catalog {
 
   private var catalog: Catalog = _
 
-  private val MAX_BATCH_NUM = 100
+  private var MAX_BATCH_NUM = 100
   private val MIN_BATCH_SIZE = 50.0
 
   def initCatalog(predFile: String): Unit = {
@@ -66,6 +66,10 @@ object Catalog {
 
   def getGroupNum(columns: mutable.HashSet[String]): Double = {
     catalog.getGroupNum(columns)
+  }
+
+  def setMaxBatchNum(maxBatchNum: Int): Unit = {
+    this.MAX_BATCH_NUM = maxBatchNum
   }
 
   def getMaxBatchNum: Int = MAX_BATCH_NUM
