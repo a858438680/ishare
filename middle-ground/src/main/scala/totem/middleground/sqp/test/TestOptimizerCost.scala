@@ -20,42 +20,47 @@ package totem.middleground.sqp.test
 
 import java.io.{FileWriter, PrintWriter}
 
+import totem.middleground.sqp.Catalog
 import totem.middleground.sqp.Optimizer
 import totem.middleground.sqp.Utils
 
 object TestOptimizerCost {
   def main(args: Array[String]): Unit = {
 
-    if (args.length < 4) {
+    if (args.length < 5) {
       System.err.println("Usage: TestOptimizerCost [DF directory] " +
-        "[Config file] [Pred file] [StatDir]")
+        "[Config file] [Pred file] [StatDir] [MaxBatchNum]")
       System.exit(1)
     }
 
+    Catalog.setMaxBatchNum(args(4).toInt)
     Optimizer.initializeOptimizer(args(2))
-    testOptimizerCost(args(0), args(1), args(3))
+    testOptimizerCost(args(0), args(1), args(3), args(4))
   }
 
-  private def testOptimizerCost(dir: String, configName: String, statDir: String): Unit = {
+  private def testOptimizerCost(dir: String, configName: String,
+                                statDir: String, maxBatchNum: String): Unit = {
 
-    val timestamp = Utils.getCurTimeStamp()
-
-    // No sharing
+    // No sharing, Uniform
     var queryGraph = Utils.getParsedQueryGraph(dir, configName)
     val noShareTime = Optimizer.testOptimizerWithoutSharing(queryGraph)
 
-    // Batch share
+    // No share, Nonuniform
+    queryGraph = Utils.getParsedQueryGraph(dir, configName)
+    val InQPTime = Optimizer.testOptimizerWithInQP(queryGraph)
+
+    // Batch share, uniform
     queryGraph = Utils.getParsedQueryGraph(dir, configName)
     val batchShareTime = Optimizer.testOptimizerWithBatchMQO(queryGraph)
 
-    // Unshare + NonUniform
+    // ishare
     queryGraph = Utils.getParsedQueryGraph(dir, configName)
-    val (unshareTime, nonUniformTime) = Optimizer.testOptimizerWithSQP(queryGraph)
+    val iShareTime = Optimizer.testOptimizerWithSQP(queryGraph)
 
-    val statFile = statDir + "/optimizer.stat"
+    val statFile = statDir + "/optimizercost.stat"
     val statWriter = new PrintWriter(new FileWriter(statFile, true))
-    statWriter.println(s"$timestamp\t$noShareTime\t$batchShareTime\t" +
-      s"$unshareTime\t$nonUniformTime\t${unshareTime + nonUniformTime}")
+    statWriter.println(s"$maxBatchNum\t$noShareTime\t$InQPTime\t$batchShareTime\t" +
+      s"$iShareTime")
     statWriter.close()
   }
 }

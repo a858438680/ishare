@@ -69,3 +69,6 @@ r_name === "AMERICA"			:0.2
 r_name === "ASIA"				:0.2
 
 s_comment like ("%Customer%Complaints%")	:0.004
+
+ps_availqty === 2               :0.01
+

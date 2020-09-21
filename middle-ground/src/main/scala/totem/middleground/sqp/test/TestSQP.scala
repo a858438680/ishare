@@ -37,7 +37,7 @@ object TestSQP {
 
   def main(args: Array[String]): Unit = {
 
-    if (args.length < 14) {
+    if (args.length < 15) {
       System.err.println("Usage: TestSQP " +
         "[Bootstrap-Servers]" +
         "[Number-shuffle-partition]" +
@@ -293,6 +293,15 @@ class ServerThread (numSubQ: Int, port: Int,
   private val initialStartupTime = 4000.0
   private val maxBatchNum = Catalog.getMaxBatchNum
 
+  private val Q17_MATTP = 545640
+  private val Q15_MATTP = 46817.05263
+
+  private val Q15_STARTUP = 8000.0
+
+  private val Q15_RATIO = 5.0
+  private val Q17_RATIO = 10.0
+  private val Q45_RATIO = 3.7
+
   private val batchNumForScheduling = Array.fill[Int](numBatchArray.length)(1)
   private val progressSimulator =
     new ProgressSimulator(maxBatchNum, batchNumForScheduling, dependency)
@@ -309,6 +318,13 @@ class ServerThread (numSubQ: Int, port: Int,
       curStep = pair._1
       setArray = pair._2
     }
+
+    val uidToQid =
+      if (isInQP) {
+        getUidToQid(qnames)
+      } else {
+        mutable.HashMap.empty[Int, Int]
+      }
 
     // This is the order for scheduling sub-queries
     // Each subquery uses its own SparkSession
@@ -368,6 +384,34 @@ class ServerThread (numSubQ: Int, port: Int,
           }
         }
 
+        if (isInQP) {
+          val qid = uidToQid(uid)
+          val matTP =
+            if (qid == 15) Q15_MATTP
+            else if (qid == 17 || qid == 45) Q17_MATTP
+            else 0.0
+
+          val cardRatio =
+            if (qid == 15) Q15_RATIO
+            else if (qid == 17) Q17_RATIO
+            else if (qid == 45) Q45_RATIO
+            else 0.0
+
+          val matCardPair =
+            Optimizer.InQPMatCardMap.getOrElse(uid, (0.0, 0.0))
+
+          if (matTP != 0.0) {
+            val totalCost = ((matCardPair._1 * cardRatio)/matTP) * 1000.0
+            // val finalCost = ((matCardPair._2 * cardRatio)/matTP) * 1000.0
+
+            println(s"totalCost of $uid: ${matCardPair._1} $totalCost")
+
+            totalTime(uid) -= totalCost
+            allTotalTime -= totalCost
+            // finalTime(uid) -= finalCost
+          }
+        }
+
         server.stopOneQuery(uid)
         Thread.sleep(2000)
         sparkSession.stop()
@@ -376,7 +420,27 @@ class ServerThread (numSubQ: Int, port: Int,
       })
     })
 
+    var existQ15 = false
+    uidToQid.foreach(pair => {
+      if (pair._2 == 15 && isInQP) {
+        existQ15 = true
+      }
+    })
+
+    if (existQ15) allTotalTime -= Q15_STARTUP
+
     server.stopServerSocket()
+  }
+
+  private def getUidToQid(qnames: Array[String]): mutable.HashMap[Int, Int] = {
+    val uidToQid = mutable.HashMap.empty[Int, Int]
+    qnames.foreach(name => {
+      val idx = name.indexOf("_")
+      val uid = name.substring(1, idx).toInt
+      val qid = name.substring(idx + 1).toInt
+      uidToQid.put(uid, qid)
+    })
+    uidToQid
   }
 
   def reportStats(statDir: String, executionModeStr: String): Unit = {

@@ -92,15 +92,17 @@ object ScheduleUtils {
     val lines = Source.fromFile(fileName).getLines().map(_.trim).toArray
     val dependency = mutable.HashMap.empty[Int, mutable.HashSet[Int]]
     lines.foreach(line => {
-      val items = line.split("\\t")
-      val uid = items(2).toInt
-      val uidSet = mutable.HashSet.empty[Int]
-      if (items.length >= 4) {
-        items(3).split(",").foreach(depUid => {
-          uidSet.add(depUid.trim.toInt)
-        })
+      if (line.nonEmpty) {
+        val items = line.split("\\t")
+        val uid = items(2).toInt
+        val uidSet = mutable.HashSet.empty[Int]
+        if (items.length >= 4) {
+          items(3).split(",").foreach(depUid => {
+            uidSet.add(depUid.trim.toInt)
+          })
+        }
+        dependency.put(uid, uidSet)
       }
-      dependency.put(uid, uidSet)
     })
     dependency
   }
@@ -112,11 +114,13 @@ object ScheduleUtils {
     val uidToLatencyMap = mutable.HashMap.empty[Int, Double]
     val qidToUid = mutable.HashMap.empty[Int, Int]
     lines.foreach(line => {
-      val items = line.split("\\t")
-      val uid = items(2).toInt
-      uidToLatencyMap.put(uid, items(items.length - 1).toDouble)
-      if (rootQueries.contains(uid)) {
-        qidToUid.put(getQid(items(3)), uid)
+      if (line.nonEmpty) {
+        val items = line.split("\\t")
+        val uid = items(2).toInt
+        uidToLatencyMap.put(uid, items(items.length - 1).toDouble)
+        if (rootQueries.contains(uid)) {
+          qidToUid.put(getQid(items(3)), uid)
+        }
       }
     })
     val latencyArray = new Array[Double](uidToLatencyMap.size)

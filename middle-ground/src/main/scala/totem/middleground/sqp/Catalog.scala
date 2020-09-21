@@ -167,7 +167,11 @@ class Catalog (predFile: String) {
     "n1_regionkey:r_regionkey" -> 1.0,
     "r_regionkey:n1_regionkey" -> 5.0,
     "s_nationkey:n2_nationkey" -> 1.0,
-    "n2_nationkey:s_nationkey" -> 400.0
+    "n2_nationkey:s_nationkey" -> 400.0,
+
+    // Q45
+    "avg_quantity:ps_availqty" -> 10.0,
+    "ps_availqty:avg_quantity" -> 10.0
 
   )
 

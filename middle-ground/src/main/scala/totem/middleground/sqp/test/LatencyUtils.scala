@@ -59,10 +59,11 @@ object LatencyUtils {
   }
 
   def parseQueryStandaloneLatencyFile(fileName: String):
-  (mutable.HashMap[Int, String], mutable.HashMap[Int, Double]) = {
+  (mutable.HashMap[Int, String], mutable.HashMap[Int, Double], String) = {
     val lines = Source.fromFile(fileName).getLines().map(_.trim).toArray
     val qidToLatencyMap = mutable.HashMap.empty[Int, Double]
     val qidToApproachMap = mutable.HashMap.empty[Int, String]
+    var thisApproach: String = ""
     lines.foreach(line => {
       if (line.nonEmpty) {
         val items = line.split("\\t")
@@ -71,9 +72,10 @@ object LatencyUtils {
         val latency = items(3).toDouble
         qidToApproachMap.put(qid, approach)
         qidToLatencyMap.put(qid, latency)
+        thisApproach = approach
       }
     })
 
-    (qidToApproachMap, qidToLatencyMap)
+    (qidToApproachMap, qidToLatencyMap, thisApproach)
   }
 }

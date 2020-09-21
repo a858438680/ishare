@@ -1,0 +1,19 @@
+  def exec46(spark: SparkSession): Unit = {
+
+    val doubleSum = new DoubleSum
+    val doubleSum2 = new DoubleSum
+
+    val l = DataUtils.loadStreamTable(spark, "lineitem", "l", tpchSchema)
+    val p = DataUtils.loadStreamTable(spark, "part", "p", tpchSchema)
+
+    val agg_l = l
+    .groupBy($"l_partkey")
+    .agg(
+      (doubleSum($"l_quantity") * 0.02).as("sum_quantity")) 
+
+    return p
+      .join(agg_l, $"p_partkey" === $"l_partkey")
+      .agg(
+        doubleSum2($"sum_quantity").as("total_sum_quantity"))
+      .select($"total_sum_quantity")
+  }

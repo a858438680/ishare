@@ -36,6 +36,9 @@ object SubsumeState extends Enumeration {
 
 object Optimizer {
 
+  val InQPMatCardMap: mutable.HashMap[Int, (Double, Double)] =
+    mutable.HashMap.empty[Int, (Double, Double)]
+
   val dummyOperator: PlanOperator = genDummyOperator()
 
   val finalWorkRatio = 1.0
@@ -85,8 +88,37 @@ object Optimizer {
     decideExecutionPace(queryGraphWithSubqueries, batchFinalWork, nonUniform, isInQP)
   }
 
-  def testOptimizerWithSQP(queryGraph: QueryGraph): (Double, Double) = {
-    (0.0, 0.0)
+  def testOptimizerWithSQP(queryGraph: QueryGraph): Double = {
+    val enableUnshare = true
+    val nonUniform = true
+    val batchFinalWork = getAllBatchFinalWork(queryGraph)
+    val queryGraphWithPerOPFinalWork = getPerOPFinalWork(queryGraph, batchFinalWork)
+    val queryGraphWithMQO = batchMQO(queryGraphWithPerOPFinalWork)
+    val queryGraphWithSubqueries = findSubQueries(queryGraphWithMQO)
+
+    val start = System.nanoTime()
+    val isInQP = false
+    val queryGraphWithPace =
+      decideExecutionPace(queryGraphWithSubqueries, batchFinalWork, nonUniform, isInQP)
+    if (enableUnshare) {
+      UnshareMQO(queryGraphWithPace, batchFinalWork)
+    }
+
+    val optTime = (System.nanoTime() - start)/1000000
+    optTime
+  }
+
+  def testOptimizerWithInQP(queryGraph: QueryGraph): Double = {
+    val nonUniform = true
+    val isInQP = true
+    val batchFinalWork = getAllBatchFinalWork(queryGraph)
+    val queryWithAnnotatedBlockingOP = breakSingleQueryIntoSubqueries(queryGraph)
+    val queryGraphWithSubqueries = findSubQueries(queryWithAnnotatedBlockingOP)
+
+    val start = System.nanoTime()
+    decideExecutionPace(queryGraphWithSubqueries, batchFinalWork, nonUniform, isInQP)
+    val optTime = (System.nanoTime() - start)/1000000
+    optTime
   }
 
   def testOptimizerWithBatchMQO(queryGraph: QueryGraph): Double = {
@@ -176,7 +208,7 @@ object Optimizer {
   private def breakSingleQueryIntoSubqueries(queryGraph: QueryGraph): QueryGraph = {
 
     queryGraph.qidToQuery.foreach(pair =>
-      if (pair._1 != 2 &&  pair._1 != 13) {
+      if (pair._1 == 17 ||  pair._1 == 15 || pair._1 == 45 || pair._1 == 46) {
         annotateBlockingOperator(pair._2, dummyOperator, false)
       })
 
@@ -509,6 +541,13 @@ object Optimizer {
       })
 
     })
+
+    if (isInQP) {
+      val collectPerOPFinalWork = false
+      val collectPerOPCardMap = false
+      CostEstimater.estimatePlanGraphCost(subQueries, cacheManagers, finalBatchNums, execOrder,
+        queryDependency, parentDep, collectPerOPFinalWork, collectPerOPCardMap, isInQP)
+    }
 
     // Generate scheduling order
     val qidOrder = finalWorkConstraints.toSeq.sortWith((pairA, pairB) => {

@@ -242,11 +242,23 @@ object Utils {
     while (uidQueue.nonEmpty) {
       val curUid = uidQueue.dequeue()
       val latency = getLatency(curUid, finished, latencyArray, uidDependency)
+      // val latency = getFullLatency(curUid, latencyArray, uidDependency)
       curLatency += latency
       latencyMap.put(curUid, curLatency)
     }
 
     latencyMap
+  }
+
+  private def getFullLatency(uid: Int,
+                         latencyArray: Array[Double],
+                         uidDependency: mutable.HashMap[Int, mutable.HashSet[Int]]): Double = {
+    latencyArray(uid) +
+      uidDependency(uid).map(childUid => {
+        getFullLatency(childUid, latencyArray, uidDependency)
+      }).foldRight(0.0)((A, B) => {
+        A + B
+      })
   }
 
   private def getLatency(uid: Int, finished: mutable.HashSet[Int],

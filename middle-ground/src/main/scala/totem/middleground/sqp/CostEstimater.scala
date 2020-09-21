@@ -126,6 +126,8 @@ object CostEstimater {
     val finalWork = new Array[Double](numSubQ)
     var totalWorkSum = 0.0
 
+    if (isInQP) Optimizer.InQPMatCardMap.clear()
+
     subQueries.foreach(resetCostInfo)
     execOrder.foreach(uid => {
       cacheManagers(uid).getCache(batchNums) match {
@@ -327,7 +329,9 @@ object CostEstimater {
           aggOP.stateSize = stateSize + inputInsert - inputDelete
 
           val (outInsert, outDelete) =
-            if (stateSize < realGroups) {
+            if (realGroups == 1.0) {
+              (1.0, 1.0)
+            } else if (stateSize < realGroups) {
               val insert = scala.math.min(realGroups - stateSize, inputInsert)
               val insert_for_update = scala.math.max(0, inputInsert - (realGroups - stateSize))
               val insert_to_update = scala.math.min(stateSize, insert_for_update)
@@ -354,9 +358,12 @@ object CostEstimater {
               ((inputDelete/aggOP.stateSize) * aggOP.stateSize * math.log(aggOP.stateSize))
           }
 
+          var isLastBatch = false
           val repair =
-            if (isInQP) {
+            if (isInQP && parentBatchNum != -1) {
               aggOP.curBatchIdx += 1
+              if (aggOP.curBatchIdx == batchNum) isLastBatch = true
+
               val curProgress = aggOP.curBatchIdx/batchNum.toDouble
               val parentProgress = (aggOP.parentBatchIdx + 1)/parentBatchNum.toDouble
               if (curProgress >= parentProgress) {
@@ -372,8 +379,17 @@ object CostEstimater {
           } else {
             val baseSize = inputInsert + inputDelete
             val baseCost = baseSize * AGGREADCOST + aggStartupCost + additionalCost
-            if (!isInQP) {
+            if (!isInQP || parentBatchNum == -1) {
               costInfo.totalCost += getMatCost(baseCost, totalOutInsert + totalOutDelete, aggOP)
+            } else {
+              val matCardMap = Optimizer.InQPMatCardMap
+              val matCardPair = matCardMap.getOrElse(uid, (0.0, 0.0))
+              val finalCard =
+                if (isLastBatch) totalOutInsert + totalOutDelete
+                else 0.0
+              val newCard = matCardPair._1 + totalOutInsert + totalOutDelete
+              val newMatCardPair = (newCard, finalCard)
+              matCardMap.put(uid, newMatCardPair)
             }
             materialize(costInfo, aggOP, qidSet)
 
@@ -871,7 +887,9 @@ object CostEstimater {
         optQidCluster.add(mutable.HashSet(15))
         optQidCluster.add(mutable.HashSet(37))
         curNodeSet.foreach(optNodeSet.add)
-      } else if (curReducedTotalWork > 0.0) {
+      }
+      // else {
+      else if (curReducedTotalWork > 0) {
       // if (curReducedTotalWork > 0.0) {
         curQidCluster.foreach(optQidCluster.add)
         curNodeSet.foreach(optNodeSet.add)

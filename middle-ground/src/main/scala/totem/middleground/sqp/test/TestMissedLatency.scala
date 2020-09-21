@@ -27,23 +27,32 @@ import scala.io.Source
 object TestMissedLatency {
 
   def main(args: Array[String]): Unit = {
-
+    import ScheduleUtils._
     import LatencyUtils._
     import totem.middleground.sqp.Utils
 
-    if (args.length < 5) {
+    if (args.length < 6) {
       System.err.println(
         "Usage: TestMissedLatency [Batchtime] [Goal Configuration File] " +
-          "[Standalone Latency] [SubQuery File] [statDir]")
+          "[Standalone Latency] [SubQuery File] [Dependency Map] [statDir]")
       System.exit(1)
     }
 
     val subQueryFile = args(3)
-    val statDir = args(4)
+    val statDir = args(5)
     val constraintMap = getConstraints(args(0), args(1))
-    val (approachMap, latencyMap) = parseQueryStandaloneLatencyFile(args(2))
+    val (approachMap, latencyMap, thisApproach) =
+      parseQueryStandaloneLatencyFile(args(2))
 
-    val (batchNumArray, qidToUids) = parseSubQueryBatchNumFile(subQueryFile)
+    val (batchNumArray, qidToUids, qidToLatency) = parseSubQueryBatchNumFile(subQueryFile)
+
+    // val dependency = parseDependencyFile(args(4))
+    // val rootUidQueries = findRootQueries(dependency)
+    // val (latencyArray, qidToRootUid) = parseSubQueryLatencyFile(subQueryFile, rootUidQueries)
+    // val qidList = qidToRootUid.keysIterator.toList
+    // val schedulingOrder = buildSchedulingOrder(qidList, qidToRootUid)
+    // val stackLatency = computeQueryLatency(latencyArray, dependency, schedulingOrder)
+    // val standaloneLatency = fromStackToStandalone(stackLatency)
 
     val missAbsFile = statDir + "/missAbs.stat"
     val missPerFile = statDir + "/missPer.stat"
@@ -52,10 +61,9 @@ object TestMissedLatency {
     val absWriter = new PrintWriter(new FileWriter(missAbsFile, true))
     val perWriter = new PrintWriter(new FileWriter(missPerFile, true))
 
-    latencyMap.foreach(pair => {
-      val qid = pair._1
-      val latency = pair._2
-      val approach = approachMap(qid)
+    qidToUids.keysIterator.foreach(qid => {
+      val latency = qidToLatency(qid)
+      val approach = thisApproach
       val constraint = constraintMap(qid)
 
       val overhead = computeStartupOverhead(qid, qidToUids, batchNumArray)
@@ -86,19 +94,26 @@ object TestMissedLatency {
   }
 
   def parseSubQueryBatchNumFile(fileName: String):
-  (Array[Int], mutable.HashMap[Int, mutable.HashSet[Int]]) = {
+  (Array[Int],
+    mutable.HashMap[Int, mutable.HashSet[Int]],
+    mutable.HashMap[Int, Double]) = {
 
     val lines = Source.fromFile(fileName).getLines().map(_.trim).toArray
     val uidToBatchNumMap = mutable.HashMap.empty[Int, Int]
     val qidToUids = mutable.HashMap.empty[Int, mutable.HashSet[Int]]
+    val qidToStandaloneLatency = mutable.HashMap.empty[Int, Double]
     lines.foreach(line => {
       if (line.nonEmpty) {
         val items = line.split("\\t")
         val uid = items(2).toInt
+        val latency = items(6).toDouble
         uidToBatchNumMap.put(uid, items(4).toInt)
         getQids(items(3)).foreach(qid => {
           val uidSet = qidToUids.getOrElseUpdate(qid, mutable.HashSet.empty[Int])
           uidSet.add(uid)
+
+          val curLatency = qidToStandaloneLatency.getOrElse(qid, 0.0)
+          qidToStandaloneLatency.put(qid, curLatency + latency)
         })
       }
     })
@@ -109,7 +124,7 @@ object TestMissedLatency {
       batchNumArray(uid) = batchNum
     })
 
-    (batchNumArray, qidToUids)
+    (batchNumArray, qidToUids, qidToStandaloneLatency)
   }
 
   def getQids(queryName: String): mutable.HashSet[Int] = {
