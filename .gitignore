@@ -36,6 +36,7 @@ conf/*.conf
 conf/*.properties
 conf/*.sh
 conf/*.xml
+*.sh
 conf/java-opts
 conf/slaves
 dependency-reduced-pom.xml

@@ -882,14 +882,15 @@ object CostEstimater {
         computeOptCluster(op, curNodeSet, qidSet, finalWorkConstrainMap)
       optQidCluster.clear()
       optNodeSet.clear()
-      if (qidSet.intersect(mutable.HashSet(15, 37)).nonEmpty &&
-        qidSet.size == 2) {
-        optQidCluster.add(mutable.HashSet(15))
-        optQidCluster.add(mutable.HashSet(37))
-        curNodeSet.foreach(optNodeSet.add)
-      }
+      // if (qidSet.intersect(mutable.HashSet(15, 37)).nonEmpty &&
+      //   qidSet.size == 2) {
+      //   optQidCluster.add(mutable.HashSet(15))
+      //   optQidCluster.add(mutable.HashSet(37))
+      //   curNodeSet.foreach(optNodeSet.add)
+      // }
       // else {
-      else if (curReducedTotalWork > 0) {
+      //else
+      if (curReducedTotalWork > 0) {
       // if (curReducedTotalWork > 0.0) {
         curQidCluster.foreach(optQidCluster.add)
         curNodeSet.foreach(optNodeSet.add)
