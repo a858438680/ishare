@@ -61,7 +61,7 @@ object Parser {
     curQid = qid
 
     val subQuery = parseSubQuery(lines, 0)
-    val rootOperator = genRootOperator()
+    val rootOperator = Utils.genRootOperator(curQid)
 
     rootOperator.setChildren(Array[PlanOperator](subQuery))
     subQuery.setParents(Array[PlanOperator](rootOperator))
@@ -71,17 +71,6 @@ object Parser {
 
   def extractRawColomn(str: String): String = {
     getStringBetween(str, LEFTATTR, RIGHTATTR)
-  }
-
-  private def genRootOperator(): PlanOperator = {
-    val qidSet = Array(curQid)
-    val outputAttrs = mutable.HashSet.empty[String]
-    val referencedAttrs = mutable.HashSet.empty[String]
-    val aliasAttrs = mutable.HashMap.empty[String, String]
-    val dfStr = ""
-
-    new RootOperator(qidSet, outputAttrs,
-      referencedAttrs, aliasAttrs, dfStr)
   }
 
   private def parseSubQuery(lines: Array[String], curLine: Int): PlanOperator = {
@@ -430,7 +419,7 @@ object Parser {
 
     var curIdx = nextLine(lines, cur) // skip the first line (start with .agg)
     var line = lines(curIdx)
-    while (includeAggFunc(line, aggFunc, aggFuncDef)) {
+    while (!newOperator(line) && includeAggFunc(line, aggFunc, aggFuncDef)) {
       parseRefAlias(line, outputAttrs, referencedAttrs, aliasAttrs)
       mapFromAliasToAggFunc(line, aggFuncDef, aliasFunc)
 

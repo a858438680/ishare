@@ -64,6 +64,10 @@ object Catalog {
     catalog.getTableAlias(tableName)
   }
 
+  def getTableNameFromKey(key: String): String = {
+    catalog.getTableNameFromKey(key)
+  }
+
   def getGroupNum(columns: mutable.HashSet[String]): Double = {
     catalog.getGroupNum(columns)
   }
@@ -391,7 +395,7 @@ class Catalog (predFile: String) {
     leftTableSize * (rightTableSize/distinctValue)
   }
 
-  private def getTableNameFromKey(key: String): String = {
+  def getTableNameFromKey(key: String): String = {
     val idx = key.indexOf("_") + 1
     key.substring(0, idx) match {
       case "l_" => "lineitem"

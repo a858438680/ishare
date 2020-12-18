@@ -125,6 +125,68 @@ object Utils {
     op.childOps.foreach(resetCopy)
   }
 
+  def findSPJSubquery(planOperator: PlanOperator,
+                      qid: Int,
+                      spjMap: mutable.HashMap[Int, mutable.HashSet[PlanOperator]],
+                      parentMap: mutable.HashMap[Int, mutable.HashSet[PlanOperator]]): Unit = {
+    if (existMultiParents(planOperator)) return
+    val isSPJSubQuery = findSPJHelper(planOperator, false)
+    if (isSPJSubQuery) {
+      val spjSet = spjMap.getOrElseUpdate(qid, mutable.HashSet.empty[PlanOperator])
+      spjSet.add(planOperator)
+      // Note the root operator will never be included in the SPJ subquery
+      val parentSet = parentMap.getOrElseUpdate(qid, mutable.HashSet.empty[PlanOperator])
+      parentSet.add(planOperator.parentOps(0))
+    } else {
+      planOperator.childOps.foreach(findSPJSubquery(_, qid, spjMap, parentMap))
+    }
+  }
+
+  private def findSPJHelper(planOperator: PlanOperator, hasJoinParent: Boolean): Boolean = {
+
+    var isSPJ = false
+    var isCurJoin = false
+
+    planOperator match {
+      case joinOp: JoinOperator if joinOp.getJoinType.compareToIgnoreCase("inner") == 0 =>
+        isSPJ = true
+        isCurJoin = true
+
+      case _: ScanOperator =>
+        if (hasJoinParent) isSPJ = true
+
+      case _: SelectOperator =>
+        if (hasJoinParent) isSPJ = true
+
+      case _ =>
+    }
+
+    if (isSPJ) planOperator.childOps.foreach(isSPJ &= findSPJHelper(_, hasJoinParent || isCurJoin))
+
+    isSPJ
+  }
+
+  private def existMultiParents(planOperator: PlanOperator): Boolean = {
+    if (planOperator.parentOps.length > 1) {
+      true
+    } else {
+      var exist = false
+      planOperator.childOps.foreach(exist |= existMultiParents(_))
+      exist
+    }
+  }
+
+  def genRootOperator(qid: Int): PlanOperator = {
+    val qidSet = Array(qid)
+    val outputAttrs = mutable.HashSet.empty[String]
+    val referencedAttrs = mutable.HashSet.empty[String]
+    val aliasAttrs = mutable.HashMap.empty[String, String]
+    val dfStr = ""
+
+    new RootOperator(qidSet, outputAttrs,
+      referencedAttrs, aliasAttrs, dfStr)
+  }
+
   def getParsedQueryGraph(dir: String, configName: String): QueryGraph = {
     val configInfo = Utils.parseConfigFile(configName)
 

@@ -47,6 +47,23 @@ object Optimizer {
     Catalog.initCatalog(predFile)
   }
 
+  def estimateQueryGraphCost(queryGraph: QueryGraph): Double = {
+    val batchFinalWork = getAllBatchFinalWork(queryGraph)
+    val queryGraphWithSubqueries = findSubQueries(queryGraph)
+    val isInQP = false
+
+    var totalTime: Long = 0L
+    val start = System.nanoTime()
+
+    val (_, minCost) =
+        decideNonUniformPace(queryGraphWithSubqueries, batchFinalWork, new Array[Int](0), isInQP)
+
+    totalTime += (System.nanoTime() - start)/1000000
+    println(s"Estimating query graph cost: ${totalTime}ms")
+
+    minCost
+  }
+
   def OptimizeUsingSQP(queryGraph: QueryGraph, enableUnshare: Boolean):
   QueryGraph = {
     val nonUniform = true
@@ -291,7 +308,8 @@ object Optimizer {
   def getPerOPFinalWork(queryGraph: QueryGraph,
                         batchFinalWork: mutable.HashMap[Int, Double]): QueryGraph = {
     val graphWithSubQueries = findSubQueries(queryGraph)
-    val graphWithBatchNum = decideUniformPace(graphWithSubQueries, batchFinalWork)
+    val (graphWithBatchNum, _) = decideUniformPace(graphWithSubQueries, batchFinalWork)
+
     graphWithBatchNum.numBatches.zipWithIndex.foreach(pair => {
       val batchNum = pair._1
       val uid = pair._2
@@ -337,7 +355,7 @@ object Optimizer {
 
     val start = System.nanoTime()
 
-    val retQueryGraph =
+    val (retQueryGraph, _) =
       if (nonUniform) {
         decideNonUniformPace(queryGraph, batchFinalWork, new Array[Int](0), isInQP)
       } else {
@@ -352,7 +370,8 @@ object Optimizer {
   }
 
   private def decideUniformPace(queryGraph: QueryGraph,
-                                batchFinalWork: mutable.HashMap[Int, Double]): QueryGraph = {
+                                batchFinalWork: mutable.HashMap[Int, Double]):
+  (QueryGraph, Double) = {
     val subQueries = queryGraph.subQueries
     val numSubQ = subQueries.length
     val qidToUids = queryGraph.qidToUids
@@ -375,6 +394,7 @@ object Optimizer {
     val collectPerOPCardMap = false
     val isInQP = false
     val parentDep = mutable.HashMap.empty[Int, mutable.HashSet[Int]]
+    var totalWork: Double = 0.0
 
     cluster.foreach(qidCluster => {
       for (idx <- 0 until numSubQ) newBatchNums(idx) = 0
@@ -382,18 +402,20 @@ object Optimizer {
       val maxBatchNum = Catalog.getMaxBatchNum
       var curBatchNum = maxBatchNum
       var meetConstraint = true
+      var perClusterTotalwork = 0.0
 
       while (meetConstraint && curBatchNum >= 1) {
         qidCluster.foreach(qid => {
           qidToUids(qid).foreach(uid => newBatchNums(uid) = curBatchNum)
         })
 
-        val (_, finalWork) =
+        val (curTotalWork, finalWork) =
           CostEstimater.estimatePlanGraphCost(subQueries,
             cacheManagers, newBatchNums, execOrder, queryDependency, parentDep,
             collectPerOPFinalWork, collectPerOPCardMap, isInQP)
         val qidToFinalWork =
           CostEstimater.buildQidFinalWork(qidToUids, finalWork)
+        perClusterTotalwork = curTotalWork
 
         meetConstraint =
           !qidToFinalWork.exists(pair => {
@@ -404,6 +426,8 @@ object Optimizer {
 
         if (meetConstraint) curBatchNum -= 1
       }
+
+      totalWork += perClusterTotalwork
 
       curBatchNum = math.min(maxBatchNum, curBatchNum + 1)
       qidCluster.foreach(qid => {
@@ -426,16 +450,19 @@ object Optimizer {
       })
     })
 
-    QueryGraph(queryGraph.qidToQuery, queryGraph.qidToConstraints, queryGraph.fullQidSet,
-      queryGraph.subQueries, queryGraph.qidToUids, queryGraph.uidtoQid,
-      queryGraph.queryDependency, finalWorkConstraints, uidOrderBuf.toArray, finalBatchNums)
+    val newQueryGraph =
+      QueryGraph(queryGraph.qidToQuery, queryGraph.qidToConstraints, queryGraph.fullQidSet,
+        queryGraph.subQueries, queryGraph.qidToUids, queryGraph.uidtoQid,
+        queryGraph.queryDependency, finalWorkConstraints, uidOrderBuf.toArray, finalBatchNums)
+
+    (newQueryGraph, totalWork)
   }
 
   private def decideNonUniformPace(queryGraph: QueryGraph,
                                    batchFinalWork: mutable.HashMap[Int, Double],
                                    cacheBatchNum: Array[Int],
                                    isInQP: Boolean):
-  QueryGraph = {
+  (QueryGraph, Double) = {
     val subQueries = queryGraph.subQueries
     val numSubQ = subQueries.length
     val qidToUids = queryGraph.qidToUids
@@ -463,6 +490,7 @@ object Optimizer {
     }
 
     val useCachedBatchnum = cacheBatchNum.length == numSubQ
+    var totalWork: Double = 0
 
     cluster.foreach(qidCluster => {
 
@@ -488,14 +516,16 @@ object Optimizer {
       val collectPerOPFinalWork = false
       val collectPerOPCardMap = false
       var finish = false
+      var perClusterTotalWork: Double = 0.0
 
       while (!finish) {
 
-        val (_, finalWork) =
+        val (curTotalWork, finalWork) =
           CostEstimater.estimatePlanGraphCost(subQueries, cacheManagers, curBatchNum, execOrder,
             queryDependency, parentDep, collectPerOPFinalWork, collectPerOPCardMap, isInQP)
         val qidToFinalWork =
           CostEstimater.buildQidFinalWork(qidToUids, finalWork)
+        perClusterTotalWork = curTotalWork
 
         val existViolateConstrat =
           qidToFinalWork.exists(pair => {
@@ -531,6 +561,8 @@ object Optimizer {
         }
       }
 
+      totalWork += perClusterTotalWork
+
       uidCluster.foreach(uid => {
         finalBatchNums(uid) =
           if (uid == lastDecBatchUid) {
@@ -563,9 +595,12 @@ object Optimizer {
       })
     })
 
-    QueryGraph(queryGraph.qidToQuery, queryGraph.qidToConstraints, queryGraph.fullQidSet,
-      queryGraph.subQueries, queryGraph.qidToUids, queryGraph.uidtoQid,
-      queryGraph.queryDependency, finalWorkConstraints, uidOrderBuf.toArray, finalBatchNums)
+    val newQueryGraph =
+      QueryGraph(queryGraph.qidToQuery, queryGraph.qidToConstraints, queryGraph.fullQidSet,
+        queryGraph.subQueries, queryGraph.qidToUids, queryGraph.uidtoQid,
+        queryGraph.queryDependency, finalWorkConstraints, uidOrderBuf.toArray, finalBatchNums)
+
+    (newQueryGraph, totalWork)
   }
 
   private def findChildUidArray(uid: Int,
@@ -908,7 +943,7 @@ object Optimizer {
     }
 
     val isInQP = false
-    decideNonUniformPace(queryGraph, batchFinalWork, cachedBatchNum, isInQP)
+    decideNonUniformPace(queryGraph, batchFinalWork, cachedBatchNum, isInQP)._1
   }
 
   private def findRootSubQuery(node: PlanOperator): PlanOperator = {
@@ -1373,7 +1408,7 @@ object Optimizer {
     newOP
   }
 
-  private def removeParent(child: PlanOperator, parent: PlanOperator): Unit = {
+  def removeParent(child: PlanOperator, parent: PlanOperator): Unit = {
     val newParents = ArrayBuffer.empty[PlanOperator]
     var findOne = false
     child.parentOps.foreach(oldParent => {
