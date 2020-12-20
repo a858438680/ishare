@@ -125,21 +125,45 @@ object Utils {
     op.childOps.foreach(resetCopy)
   }
 
-  def findSPJSubquery(planOperator: PlanOperator,
+  def countSPJSubquery(planOperator: PlanOperator,
                       qid: Int,
-                      spjMap: mutable.HashMap[Int, mutable.HashSet[PlanOperator]],
-                      parentMap: mutable.HashMap[Int, mutable.HashSet[PlanOperator]]): Unit = {
+                      spjMap: mutable.HashMap[Int, Int]): Unit = {
     if (existMultiParents(planOperator)) return
     val isSPJSubQuery = findSPJHelper(planOperator, false)
     if (isSPJSubQuery) {
-      val spjSet = spjMap.getOrElseUpdate(qid, mutable.HashSet.empty[PlanOperator])
-      spjSet.add(planOperator)
-      // Note the root operator will never be included in the SPJ subquery
-      val parentSet = parentMap.getOrElseUpdate(qid, mutable.HashSet.empty[PlanOperator])
-      parentSet.add(planOperator.parentOps(0))
+      val count = spjMap.getOrElseUpdate(qid, 0)
+      spjMap.put(qid, count + 1)
+    } else {
+      planOperator.childOps.foreach(countSPJSubquery(_, qid, spjMap))
+    }
+  }
+
+  def findSPJSubquery(planOperator: PlanOperator,
+                      qid: Int,
+                      spjMap: mutable.HashMap[Int, PlanOperator],
+                      parentMap: mutable.HashMap[Int, PlanOperator]): Unit = {
+    if (existMultiParents(planOperator)) return
+    val isSPJSubQuery = findSPJHelper(planOperator, false)
+    if (isSPJSubQuery) {
+      if (!includesJoinCycle(planOperator)) {
+        assert(!spjMap.contains(qid))
+        spjMap.put(qid, planOperator)
+        parentMap.put(qid, planOperator.parentOps(0))
+      }
     } else {
       planOperator.childOps.foreach(findSPJSubquery(_, qid, spjMap, parentMap))
     }
+  }
+
+  private def includesJoinCycle(planOperator: PlanOperator): Boolean = {
+    var hasCycle = false
+    planOperator match {
+      case joinOperator: JoinOperator =>
+        if (joinOperator.getPostFilter.nonEmpty) hasCycle = true
+        else joinOperator.childOps.foreach(hasCycle |= includesJoinCycle(_))
+      case _ =>
+    }
+    hasCycle
   }
 
   private def findSPJHelper(planOperator: PlanOperator, hasJoinParent: Boolean): Boolean = {

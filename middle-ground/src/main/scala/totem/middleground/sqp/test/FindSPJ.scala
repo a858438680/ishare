@@ -36,16 +36,14 @@ object FindSPJ {
     val dir = args(0)
     val configName = args(1)
 
-    val spjMap = mutable.HashMap.empty[Int, mutable.HashSet[PlanOperator]]
-    val parentMap = mutable.HashMap.empty[Int, mutable.HashSet[PlanOperator]]
+    val spjMap = mutable.HashMap.empty[Int, Int]
     val queryGraph = Utils.getParsedQueryGraph(dir, configName)
     queryGraph.qidToQuery.foreach(pair => {
       val qid = pair._1
       val query = pair._2
 
-      Utils.findSPJSubquery(query, qid, spjMap, parentMap)
-      val spjSet = spjMap.getOrElse(qid, mutable.HashSet.empty[PlanOperator])
-      print(s"Query $qid: ${spjSet.size}\n")
+      Utils.countSPJSubquery(query, qid, spjMap)
+      print(s"Query $qid: ${spjMap.getOrElse(qid, 0)}\n")
     })
 
   }

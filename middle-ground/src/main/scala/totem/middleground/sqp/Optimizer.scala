@@ -253,7 +253,7 @@ object Optimizer {
     op.childOps.foreach(annotateBlockingOperator(_, op, isMetAgg))
   }
 
-  private def findSubQueries(queryGraph: QueryGraph): QueryGraph = {
+  def findSubQueries(queryGraph: QueryGraph): QueryGraph = {
 
     val qidToUids = mutable.HashMap.empty[Int, mutable.HashSet[Int]]
     val uidtoQid = mutable.HashMap.empty[Int, Int]
@@ -347,7 +347,7 @@ object Optimizer {
       collectPerOPFinalWork, collectPerOPCardMap, isInQP)._1
   }
 
-  private def decideExecutionPace(queryGraph: QueryGraph,
+  def decideExecutionPace(queryGraph: QueryGraph,
                                   batchFinalWork: mutable.HashMap[Int, Double],
                                   nonUniform: Boolean,
                                   isInQP: Boolean): QueryGraph = {
@@ -1179,7 +1179,7 @@ object Optimizer {
   private val unSupportedOPSet = HashSet("left_semi", "left_anti", "left_outer", "cross")
 
   // TODO: this could be buggy when query text (not just the join) includes the key words
-  private def containUnsupportedOP(signature: String): Boolean = {
+  def containUnsupportedOP(signature: String): Boolean = {
     unSupportedOPSet.exists(signature.contains(_))
   }
 
@@ -1402,7 +1402,7 @@ object Optimizer {
     setNewChild(parent, child, selectOperator)
   }
 
-  private def genMergedOperatorForDiffQuery(op: PlanOperator,
+  def genMergedOperatorForDiffQuery(op: PlanOperator,
                                             otherOP: PlanOperator): PlanOperator = {
     val newOP = mergeOpForDiffQueryHelper(op, otherOP)
     newOP
@@ -1593,7 +1593,7 @@ object Optimizer {
     parent.childOps(childIdx) = newChild
   }
 
-  private def containTree(op: PlanOperator, tree: PlanOperator): Boolean = {
+  def containTree(op: PlanOperator, tree: PlanOperator): Boolean = {
 
     var isContain = false
 
