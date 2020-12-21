@@ -1165,7 +1165,7 @@ object Optimizer {
     id
   }
 
-  private def genSignature(op: PlanOperator): Unit = {
+  def genSignature(op: PlanOperator): Unit = {
     genSignatureHelper(op)
   }
 

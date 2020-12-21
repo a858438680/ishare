@@ -35,14 +35,13 @@ object HolisticOptimizer {
     })
 
     // Step 2: Extract SPJ subplans
+    val spjQidSet = mutable.HashSet.empty[Int]
     val spjMap = mutable.HashMap.empty[Int, PlanOperator]
     val parentMap = mutable.HashMap.empty[Int, PlanOperator]
-    val spjQidSet = mutable.HashSet.empty[Int]
     queryGraph.qidToQuery.foreach(pair => {
       val qid = pair._1
       val query = pair._2
-      spjQidSet.add(qid)
-      Utils.findSPJSubquery(query, qid, spjMap, parentMap)
+      Utils.findSPJSubquery(query, qid, spjQidSet, spjMap, parentMap)
     })
 
     // Step 3: Breaking a subplan into multiple individual joins
@@ -70,13 +69,8 @@ object HolisticOptimizer {
         var found = false
         var impactedTables = mutable.HashSet.empty[String]
         perQueryJoinSet.foreach(op => {
-          if (!found) {
-            if (targetOp == null) {
-              targetOp = op
-              impactedTables = findDirectTables(targetOp)
-            }
-            else found |= replaceOldOp(targetOp, impactedTables, op)
-          }
+          if (targetOp == null) targetOp = op
+          else found |= replaceOldOp(targetOp, op)
         })
         assert(found || perQueryJoinSet.size == 1)
         perQueryJoinSet.remove(targetOp)
@@ -115,14 +109,15 @@ object HolisticOptimizer {
     })
 
     // Step 8: MQO for non-SPJ parts
-    val sharedQuery = mutable.HashSet.empty[Int]
-    val sigMap = populateSigMap(spjQidSet, queryGraph, sharedQuery)
+    val sharedQueries = mutable.HashSet.empty[Int]
+    queryGraph.qidToQuery.foreach(pair => {Optimizer.genSignature(pair._2)})
+    val sigMap = populateSigMap(spjQidSet, queryGraph, sharedQueries)
     queryGraph.qidToQuery.foreach(pair => {
       val qid = pair._1
       val query = pair._2
-      if (!sharedQuery.contains(qid)) {
-        mergeSubQuery(query, sigMap, qid, sharedQuery, queryGraph)
-        sharedQuery.add(qid)
+      if (!sharedQueries.contains(qid)) {
+        mergeSubQuery(query, sigMap, qid, sharedQueries, queryGraph)
+        sharedQueries.add(qid)
       }
     })
 
@@ -270,7 +265,7 @@ object HolisticOptimizer {
               joinMapping: mutable.HashMap[Int, mutable.HashSet[PlanOperator]],
               joinGroups: mutable.HashMap[String, mutable.HashSet[PlanOperator]],
               queryGraph: QueryGraph): Unit = {
-    var minSavedCost = Double.MaxValue
+    var maxSavedCost = Double.MinValue
     var sharedJoinCond: String = ""
 
     var oldPlan = mutable.HashSet.empty[PlanOperator]
@@ -282,9 +277,9 @@ object HolisticOptimizer {
       val joinCond = pair._1
       val joinSet = pair._2
       val quadruplet = computeSavedCost(joinSet, queryGraph)
-      if (quadruplet._1 <= minSavedCost) {
+      if (quadruplet._1 > maxSavedCost) {
         sharedJoinCond = joinCond
-        minSavedCost = quadruplet._1
+        maxSavedCost = quadruplet._1
         oldPlan = quadruplet._2
         sharedQueries = quadruplet._3
         sharedPlan = quadruplet._4
@@ -293,7 +288,7 @@ object HolisticOptimizer {
 
     // Perform the sharing
     joinGroups.remove(sharedJoinCond)
-    if (minSavedCost > 0) {
+    if (maxSavedCost > 0) {
       maintainJoinMapping(joinMapping, oldPlan, sharedQueries, sharedPlan)
       maintainJoinGroups(joinGroups)
     }
@@ -352,6 +347,7 @@ object HolisticOptimizer {
         val rootOp = Utils.genRootOperator(qid)
         planGraph.foreach(op => {
           if (op.getQidSet.contains(qid)) {
+            assert(rootOp.childOps.isEmpty)
             rootOp.setChildren(Array[PlanOperator](op))
           }
         })
@@ -579,7 +575,6 @@ object HolisticOptimizer {
                              sharedQueries: mutable.HashSet[Int],
                              sharedPlan: mutable.HashSet[PlanOperator]): Unit = {
     val sharedOp = findSharedOp(sharedQueries, sharedPlan)
-    val impactedTables = findDirectTables(sharedOp)
 
     // Remove old operators in joinMapping
     oldPlan.foreach(op => {
@@ -595,28 +590,29 @@ object HolisticOptimizer {
       val perQueryJoinSet = joinMapping(qid)
       var found = false
       perQueryJoinSet.foreach(op => {
-        found |= replaceOldOp(sharedOp, impactedTables, op)
+        found |= replaceOldOp(sharedOp, op)
       })
 
       if (!found) { // No more joins to share
         val rootOp = Utils.genRootOperator(qid)
         rootOp.setChildren(Array[PlanOperator](sharedOp))
         sharedOp.setParents(sharedOp.parentOps ++ Array[PlanOperator](rootOp))
+        assert(perQueryJoinSet.isEmpty)
         perQueryJoinSet.add(rootOp)
       }
     })
   }
 
   private def replaceOldOp(newOp: PlanOperator,
-                           impactedTables: mutable.HashSet[String],
                            op: PlanOperator): Boolean = {
     val idxSet = mutable.HashSet.empty[Int]
     op.childOps.zipWithIndex.foreach(childPair => {
       val child = childPair._1
       val idx = childPair._2
-      if (!child.isInstanceOf[JoinOperator]) {
-        val tableName = extractTableName(child)
-        if (impactedTables.contains(tableName)) idxSet.add(idx)
+      if (newOp.childOps.exists(newOpChild => {
+        !nonMatchOps(newOpChild, child)
+      })) {
+        idxSet.add(idx)
       }
     })
 
@@ -635,20 +631,24 @@ object HolisticOptimizer {
 
     var sharedOp: PlanOperator = null
     sharedPlan.foreach(op => {
-      if (op.getQidSet.exists(sharedQueries.contains)) sharedOp = op
+      if (op.getQidSet.exists(sharedQueries.contains)) {
+        assert(sharedOp == null)
+        sharedOp = op
+      }
     })
 
     sharedOp
   }
 
-  private def findDirectTables(op: PlanOperator): mutable.HashSet[String] = {
-    val impactedTableSet = mutable.HashSet.empty[String]
-    op.childOps.foreach(child => {
-      if (!child.isInstanceOf[JoinOperator]) impactedTableSet.add(extractTableName(child))
-    })
+  // private def findDirectTables(op: PlanOperator): mutable.HashSet[String] = {
+  //   val impactedTableSet = mutable.HashSet.empty[String]
+  //   op.childOps.foreach(child => {
+  //     if (!child.isInstanceOf[JoinOperator]) impactedTableSet.add(extractTableName(child))
+  //   })
 
-    impactedTableSet
-  }
+  //   assert(impactedTableSet.nonEmpty)
+  //   impactedTableSet
+  // }
 
   private def groupingIndividualJoins(
               joinMapping: mutable.HashMap[Int, mutable.HashSet[PlanOperator]]):
@@ -677,15 +677,14 @@ object HolisticOptimizer {
     breakOneSubPlan(spjSubtree, joinSet)
   }
 
-  private def breakOneSubPlan(planOperator: PlanOperator,
+  private def breakOneSubPlan(spjSubtree: PlanOperator,
                               joinSet: mutable.HashSet[PlanOperator]): Unit = {
-    val baseMapping = findAllBaseRelations(planOperator)
-    generateJoins(planOperator, baseMapping, joinSet)
+    val baseMapping = findAllBaseRelations(spjSubtree)
+    genJoinHelper(spjSubtree, baseMapping, joinSet)
   }
 
   private def findAllBaseRelations(planOperator: PlanOperator):
   mutable.HashMap[String, PlanOperator] = {
-
     val baseMapping = mutable.HashMap.empty[String, PlanOperator]
     findBaseRelationHelper(planOperator, baseMapping)
     baseMapping
@@ -715,12 +714,6 @@ object HolisticOptimizer {
     curOp.asInstanceOf[ScanOperator].getTableName
   }
 
-  private def generateJoins(planOperator: PlanOperator,
-                            baseMapping: mutable.HashMap[String, PlanOperator],
-                            joinSet: mutable.HashSet[PlanOperator]): Unit = {
-    genJoinHelper(planOperator, baseMapping, joinSet)
-  }
-
   private def genJoinHelper(planOperator: PlanOperator,
                             baseMapping: mutable.HashMap[String, PlanOperator],
                             joinSet: mutable.HashSet[PlanOperator]): Unit = {
@@ -743,7 +736,7 @@ object HolisticOptimizer {
     val joinCondSet = mutable.HashSet.empty[(String, String)]
 
     joinCondition.split("and").foreach(singleJoin => {
-      val joinKeys = singleJoin.split("===")
+      val joinKeys = singleJoin.split("===").map(_.trim)
       assert(joinKeys.length == 2)
       val keyPair = orderJoinKeys(joinKeys)
       joinCondSet.add(keyPair)

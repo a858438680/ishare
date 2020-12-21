@@ -140,6 +140,7 @@ object Utils {
 
   def findSPJSubquery(planOperator: PlanOperator,
                       qid: Int,
+                      spjSet: mutable.HashSet[Int],
                       spjMap: mutable.HashMap[Int, PlanOperator],
                       parentMap: mutable.HashMap[Int, PlanOperator]): Unit = {
     if (existMultiParents(planOperator)) return
@@ -147,11 +148,12 @@ object Utils {
     if (isSPJSubQuery) {
       if (!includesJoinCycle(planOperator)) {
         assert(!spjMap.contains(qid))
+        spjSet.add(qid)
         spjMap.put(qid, planOperator)
         parentMap.put(qid, planOperator.parentOps(0))
       }
     } else {
-      planOperator.childOps.foreach(findSPJSubquery(_, qid, spjMap, parentMap))
+      planOperator.childOps.foreach(findSPJSubquery(_, qid, spjSet, spjMap, parentMap))
     }
   }
 
