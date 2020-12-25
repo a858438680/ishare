@@ -258,10 +258,10 @@ object CostEstimater {
           val delCardMap = createEmptyCardMap(qidSet)
 
           val baseCost = batchSize * SCANREADCOST + scanStartupCost
-          if (scanOP.parentOps.length > 1) {
-              System.err.println(s"Materializing the whole table" +
-                s"for ${Utils.qidSetToString(scanOP.getQidSet)}")
-          }
+          // if (scanOP.parentOps.length > 1) {
+          //     System.err.println(s"Materializing the whole table" +
+          //       s"for ${Utils.qidSetToString(scanOP.getQidSet)}")
+          // }
           val totalCost = getMatCost(baseCost, batchSize, scanOP)
           val costInfo = CostInfo(qidSet, selectSet, cardMap, delCardMap, totalCost)
           materialize(costInfo, scanOP, qidSet)
@@ -889,7 +889,7 @@ object CostEstimater {
       //   curNodeSet.foreach(optNodeSet.add)
       // }
       // else {
-      //else
+      // else
       if (curReducedTotalWork > 0) {
       // if (curReducedTotalWork > 0.0) {
         curQidCluster.foreach(optQidCluster.add)

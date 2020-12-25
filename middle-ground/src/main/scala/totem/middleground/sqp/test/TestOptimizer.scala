@@ -19,9 +19,7 @@
 
 package totem.middleground.sqp.test
 
-import totem.middleground.sqp.Optimizer
-import totem.middleground.sqp.Parser
-import totem.middleground.sqp.Utils
+import totem.middleground.sqp.{HolisticOptimizer, Optimizer, Parser, Utils}
 
 object TestOptimizer {
 
@@ -44,7 +42,9 @@ object TestOptimizer {
   private def testOptimizerForMultiQuery(dir: String, configName: String): Unit = {
 
     val queryGraph = Utils.getParsedQueryGraph(dir, configName)
-    val newQueryGraph = Optimizer.OptimizeUsingBatchMQO(queryGraph)
+    // val newQueryGraph = Optimizer.OptimizeUsingBatchMQO(queryGraph)
+    val isSWOpt = false
+    val newQueryGraph = HolisticOptimizer.OptimizeUsingHolistic(queryGraph, isSWOpt)
 
     Utils.printQueryGraph(newQueryGraph)
     Utils.printClusterSet(Optimizer.getMutliQueryCluster(newQueryGraph))

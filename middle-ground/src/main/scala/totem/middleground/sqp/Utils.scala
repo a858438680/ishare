@@ -313,6 +313,19 @@ object Utils {
     strBuf.toString
   }
 
+  def intSetToString(outputAttrs: mutable.HashSet[Int]): String = {
+    val strBuf = new StringBuffer()
+    strBuf.append("[")
+    outputAttrs.iterator.zipWithIndex.foreach(pair => {
+      val value = pair._1
+      val idx = pair._2
+      strBuf.append(s"${value}")
+      if (idx != (outputAttrs.size - 1)) strBuf.append(", ")
+    })
+    strBuf.append("]")
+    strBuf.toString
+  }
+
   def getCurTimeStamp(): String = {
     val form = new SimpleDateFormat("MM-dd-HH:mm:ss")
     val c = Calendar.getInstance()

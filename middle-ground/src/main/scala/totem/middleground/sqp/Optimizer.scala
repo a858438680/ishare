@@ -47,16 +47,27 @@ object Optimizer {
     Catalog.initCatalog(predFile)
   }
 
-  def estimateQueryGraphCost(queryGraph: QueryGraph): Double = {
-    val batchFinalWork = getAllBatchFinalWork(queryGraph)
+  def estimateQueryGraphCost(queryGraph: QueryGraph,
+                             globalBatchFinalWork: mutable.HashMap[Int, Double],
+                             isPaceConf: Boolean): Double = {
+    // val batchFinalWork = getAllBatchFinalWork(queryGraph)
+    val batchFinalWork = mutable.HashMap.empty[Int, Double]
+    queryGraph.fullQidSet.foreach(qid => {
+      batchFinalWork.put(qid, globalBatchFinalWork(qid))
+    })
     val queryGraphWithSubqueries = findSubQueries(queryGraph)
     val isInQP = false
 
     var totalTime: Long = 0L
     val start = System.nanoTime()
 
+    val numSubQ = queryGraphWithSubqueries.subQueries.length
+    val cacheBatchNums =
+      if (isPaceConf) new Array[Int](0)
+      else Array.fill[Int](numSubQ)(1)
+
     val (_, minCost) =
-        decideNonUniformPace(queryGraphWithSubqueries, batchFinalWork, new Array[Int](0), isInQP)
+      decideNonUniformPace(queryGraphWithSubqueries, batchFinalWork, cacheBatchNums, isInQP)
 
     totalTime += (System.nanoTime() - start)/1000000
     println(s"Estimating query graph cost: ${totalTime}ms")
@@ -352,7 +363,6 @@ object Optimizer {
                                   nonUniform: Boolean,
                                   isInQP: Boolean): QueryGraph = {
     var totalTime: Long = 0L
-
     val start = System.nanoTime()
 
     val (retQueryGraph, _) =
@@ -363,7 +373,6 @@ object Optimizer {
       }
 
     totalTime += (System.nanoTime() - start)/1000000
-
     println(s"Decide Execution Pace Time: ${totalTime}ms")
 
     retQueryGraph

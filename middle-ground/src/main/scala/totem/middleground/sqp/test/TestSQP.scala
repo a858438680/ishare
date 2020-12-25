@@ -48,7 +48,7 @@ object TestSQP {
         "[Path to kafka topics command] " +
         "[Zookeeper address]" +
         "[Path to hdfs command]" +
-        "[Execution mode: 0 - NoShare, 1 - BatchShare, 2 - SQPShare, 3 - InQP]" +
+        "[Execution mode: 0 - NoShare, 1 - BatchShare, 2 - SQPShare, 3 - InQP, 4 - Holistic]" +
         "[Enable Unshare: True or False]" +
         "[DF directory]" +
         "[Config file]" +
@@ -71,7 +71,8 @@ object TestSQP {
       if (args(9).compareTo("0") == 0) ExecutionMode.NoShare
       else if (args(9).compareTo("1") == 0) ExecutionMode.BatchShare
       else if (args(9).compareTo("2") == 0) ExecutionMode.SQPShare
-      else ExecutionMode.InQP
+      else if (args(9).compareTo("3") == 0) ExecutionMode.InQP
+      else ExecutionMode.Holistic
 
     val enableUnShare =
       if (args(10).toLowerCase.compareTo("true") == 0) true
@@ -80,10 +81,12 @@ object TestSQP {
     val configFile = args(12)
     val predFile = args(13)
     val maxBatchNum = args(14).toInt
+    val isSWOpt = false
 
     Catalog.setMaxBatchNum(maxBatchNum)
     Optimizer.initializeOptimizer(predFile)
-    val optimizedQueries = optimizeMultiQuery(dfDir, configFile, executionMode, enableUnShare)
+    val optimizedQueries =
+      optimizeMultiQuery(dfDir, configFile, executionMode, enableUnShare, isSWOpt)
 
     val start = System.nanoTime()
     val pair = QueryGenerator.generateQueryAndConfiguration(optimizedQueries)
@@ -93,7 +96,7 @@ object TestSQP {
     val queryConfig = pair._2
 
     val testSQP = new TestSQP(bootstrap, shuffleNum, statDIR, SF, hdfsRoot, inputPartitions,
-      kafkaCommand, zookeeper, hdfsCommand, port, executionMode, enableUnShare,
+      kafkaCommand, zookeeper, hdfsCommand, port, executionMode, enableUnShare, isSWOpt,
       subQueries, queryConfig)
 
     testSQP.startQueries()
@@ -102,7 +105,8 @@ object TestSQP {
   private def optimizeMultiQuery(dir: String,
                                  configName: String,
                                  executionMode: ExecutionMode.Value,
-                                 enableUnShare: Boolean): QueryGraph = {
+                                 enableUnShare: Boolean,
+                                 isSWOpt: Boolean): QueryGraph = {
     var start = System.nanoTime()
     val queryGraph = Utils.getParsedQueryGraph(dir, configName)
     val parseTime = (System.nanoTime() - start)/1000000
@@ -117,6 +121,8 @@ object TestSQP {
         Optimizer.OptimizeUsingSQP(queryGraph, enableUnShare)
       } else if (executionMode == ExecutionMode.InQP) {
         Optimizer.OptimizeWithInQP(queryGraph)
+      } else if (executionMode == ExecutionMode.Holistic) {
+        HolisticOptimizer.OptimizeUsingHolistic(queryGraph, isSWOpt)
       } else { // No Sharing
         Optimizer.OptimizeWithoutSharing(queryGraph)
       }
@@ -134,7 +140,12 @@ class TestSQP (bootstrap: String, shuffleNum: String, statDIR: String, SF: Doubl
               zookeeper: String, hdfsCommand: String, port: Int,
               executionMode: ExecutionMode.Value,
               enableUnShare: Boolean,
+              isSWOpt: Boolean,
               subQueries: Array[TPCHQuery], queryConfig: QueryConfig) {
+
+  val holisticStr =
+    if (isSWOpt) "Holistic (SWOpt)"
+    else "Holistic (Adjoin)"
 
   if (executionMode == ExecutionMode.NoShare) {
     println("No Shared Execution")
@@ -144,6 +155,8 @@ class TestSQP (bootstrap: String, shuffleNum: String, statDIR: String, SF: Doubl
     println("Shared Execution of iShare(True)")
   } else if (executionMode == ExecutionMode.SQPShare && !enableUnShare) {
     println("Shared Execution of iShare(False)")
+  } else if (executionMode == ExecutionMode.Holistic) {
+    println(s"Shared Execution of $holisticStr")
   } else {
     println("No Shared Execution with InQP")
   }
@@ -230,7 +243,8 @@ class TestSQP (bootstrap: String, shuffleNum: String, statDIR: String, SF: Doubl
   def startQueries(): Unit = {
     if (executionMode == ExecutionMode.BatchShare ||
       executionMode == ExecutionMode.SQPShare ||
-      executionMode == ExecutionMode.InQP) {
+      executionMode == ExecutionMode.InQP ||
+      executionMode == ExecutionMode.Holistic) {
       createSharedTopics()
     }
 
@@ -244,12 +258,15 @@ class TestSQP (bootstrap: String, shuffleNum: String, statDIR: String, SF: Doubl
         executionMode.toString + "(True)"
       } else if (executionMode == ExecutionMode.SQPShare && !enableUnShare) {
         executionMode.toString + "(False)"
+      } else if (executionMode == ExecutionMode.Holistic) {
+        holisticStr
       } else executionMode.toString
     serverThread.reportStats(statDIR, execStr)
 
     if (executionMode == ExecutionMode.BatchShare ||
       executionMode == ExecutionMode.SQPShare ||
-      executionMode == ExecutionMode.InQP) {
+      executionMode == ExecutionMode.InQP ||
+      executionMode == ExecutionMode.Holistic) {
       deleteSharedTopics()
       clearCheckpoint()
     }
@@ -258,7 +275,8 @@ class TestSQP (bootstrap: String, shuffleNum: String, statDIR: String, SF: Doubl
   def failCleanup(): Unit = {
      if (executionMode == ExecutionMode.BatchShare ||
          executionMode == ExecutionMode.SQPShare ||
-         executionMode == ExecutionMode.InQP) {
+         executionMode == ExecutionMode.InQP ||
+         executionMode == ExecutionMode.Holistic) {
       deleteSharedTopics()
       clearCheckpoint()
     }
@@ -273,6 +291,7 @@ object ExecutionMode extends Enumeration {
   val BatchShare: ExecutionMode.Value = Value("BatchShare")
   val SQPShare: ExecutionMode.Value = Value("SQPShare")
   val InQP: ExecutionMode.Value = Value("InQP")
+  val Holistic: ExecutionMode.Value = Value("Holistic")
 }
 
 class ServerThread (numSubQ: Int, port: Int,

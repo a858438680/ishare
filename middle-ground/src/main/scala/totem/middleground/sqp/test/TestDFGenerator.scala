@@ -19,10 +19,7 @@
 
 package totem.middleground.sqp.test
 
-import totem.middleground.sqp.Optimizer
-import totem.middleground.sqp.Parser
-import totem.middleground.sqp.QueryGenerator
-import totem.middleground.sqp.Utils
+import totem.middleground.sqp._
 
 object TestDFGenerator {
   def main(args: Array[String]): Unit = {
@@ -43,7 +40,9 @@ object TestDFGenerator {
 
   private def testDFGenerator(dir: String, configName: String): Unit = {
     val queryGraph = Utils.getParsedQueryGraph(dir, configName)
-    val newQueryGraph = Optimizer.OptimizeUsingSQP(queryGraph, true)
+    // val newQueryGraph = Optimizer.OptimizeUsingSQP(queryGraph, true)
+        val isSWOpt = false
+    val newQueryGraph = HolisticOptimizer.OptimizeUsingHolistic(queryGraph, isSWOpt)
 
     Utils.printQueryGraph(newQueryGraph)
     QueryGenerator.printSubQueryProgram(newQueryGraph)
