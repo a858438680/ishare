@@ -146,7 +146,7 @@ object Utils {
     if (existMultiParents(planOperator)) return
     val isSPJSubQuery = findSPJHelper(planOperator, false)
     if (isSPJSubQuery) {
-      if (!includesJoinCycle(planOperator)) {
+      if (!includesJoinCycle(planOperator) && !includeThreeWayJoin(planOperator)) {
         assert(!spjMap.contains(qid))
         spjSet.add(qid)
         spjMap.put(qid, planOperator)
@@ -166,6 +166,21 @@ object Utils {
       case _ =>
     }
     hasCycle
+  }
+
+  private def includeThreeWayJoin(planOperator: PlanOperator): Boolean = {
+    val joinSet = mutable.HashSet.empty[JoinOperator]
+    includeThreeWayJoinHelper(planOperator, joinSet)
+    joinSet.size > 2
+  }
+
+  private def includeThreeWayJoinHelper(planOperator: PlanOperator,
+                                        joinSet: mutable.HashSet[JoinOperator]): Unit = {
+    planOperator match {
+      case joinOperator: JoinOperator => joinSet.add(joinOperator)
+      case _ =>
+    }
+    planOperator.childOps.foreach(includeThreeWayJoinHelper(_, joinSet))
   }
 
   private def findSPJHelper(planOperator: PlanOperator, hasJoinParent: Boolean): Boolean = {

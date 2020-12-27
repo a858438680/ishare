@@ -43,8 +43,7 @@ object TestOptimizer {
 
     val queryGraph = Utils.getParsedQueryGraph(dir, configName)
     // val newQueryGraph = Optimizer.OptimizeUsingBatchMQO(queryGraph)
-    val isSWOpt = false
-    val newQueryGraph = HolisticOptimizer.OptimizeUsingHolistic(queryGraph, isSWOpt)
+    val newQueryGraph = Optimizer.OptimizeUsingHolistic(queryGraph)
 
     Utils.printQueryGraph(newQueryGraph)
     Utils.printClusterSet(Optimizer.getMutliQueryCluster(newQueryGraph))

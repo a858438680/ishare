@@ -21,7 +21,7 @@ def execQ2(spark: SparkSession): Unit = {
   val subquery2 = execQ2_subquery(spark)
 
   return subquery1
-    .join(subquery2, ($"p_partkey" ===  $"min_partkey") and ($"ps_supplycost" === $"min_supplycost"))
+    .join(subquery2, $"p_partkey" ===  $"min_partkey" and $"ps_supplycost" === $"min_supplycost")
     .select($"s_acctbal", $"s_name", $"n_name", $"p_partkey", $"p_mfgr", $"s_address", $"s_phone", $"s_comment")
 }
 

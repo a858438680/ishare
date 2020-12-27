@@ -20,9 +20,7 @@ package totem.middleground.sqp.test
 
 import java.io.{FileWriter, PrintWriter}
 
-import totem.middleground.sqp.Catalog
-import totem.middleground.sqp.Optimizer
-import totem.middleground.sqp.Utils
+import totem.middleground.sqp.{Catalog, Optimizer, QueryGraph, Utils}
 
 object TestOptimizerCost {
   def main(args: Array[String]): Unit = {
@@ -43,24 +41,62 @@ object TestOptimizerCost {
 
     // No sharing, Uniform
     var queryGraph = Utils.getParsedQueryGraph(dir, configName)
-    val noShareTime = Optimizer.testOptimizerWithoutSharing(queryGraph)
+    val noShareTime = testEndtoEndOverhead(Optimizer.OptimizeWithoutSharing, queryGraph)
 
     // No share, Nonuniform
     queryGraph = Utils.getParsedQueryGraph(dir, configName)
-    val InQPTime = Optimizer.testOptimizerWithInQP(queryGraph)
+    val InQPTime = testEndtoEndOverhead(Optimizer.OptimizeWithInQP, queryGraph)
 
     // Batch share, uniform
     queryGraph = Utils.getParsedQueryGraph(dir, configName)
-    val batchShareTime = Optimizer.testOptimizerWithBatchMQO(queryGraph)
+    val batchShareTime = testEndtoEndOverhead(Optimizer.OptimizeUsingBatchMQO, queryGraph)
 
     // ishare
     queryGraph = Utils.getParsedQueryGraph(dir, configName)
-    val iShareTime = Optimizer.testOptimizerWithSQP(queryGraph)
+    val enable_share = true
+    val iShareTime = testEndtoEndOverheadBeta(Optimizer.OptimizeUsingSQP,
+      queryGraph, enable_share)
+
+    // Holistic
+    queryGraph = Utils.getParsedQueryGraph(dir, configName)
+    val holisticTime = testEndtoEndOverhead(Optimizer.OptimizeUsingHolistic, queryGraph)
+
+    // Batch_Share, AJoin
+    queryGraph = Utils.getParsedQueryGraph(dir, configName)
+    val batchShareAJoinTime =
+      testEndtoEndOverhead(Optimizer.OptimizeUsingBatchMQO_AJoin, queryGraph)
+
+    // iShare, AJoin
+    queryGraph = Utils.getParsedQueryGraph(dir, configName)
+    val iShareAJoinTime = testEndtoEndOverheadBeta(Optimizer.OptimizeUsingSQP_AJoin,
+      queryGraph, enable_share)
+
+    // Holistic, AJoin
+    queryGraph = Utils.getParsedQueryGraph(dir, configName)
+    val holisticAJoinTime =
+      testEndtoEndOverhead(Optimizer.OptimizeUsingHolistic_AJoin, queryGraph)
 
     val statFile = statDir + "/optimizercost.stat"
     val statWriter = new PrintWriter(new FileWriter(statFile, true))
     statWriter.println(s"$maxBatchNum\t$noShareTime\t$InQPTime\t$batchShareTime\t" +
-      s"$iShareTime")
+      s"$iShareTime\t$holisticTime\t$batchShareAJoinTime\t$iShareAJoinTime\t$holisticAJoinTime")
     statWriter.close()
+  }
+
+  private def testEndtoEndOverhead(f: QueryGraph => QueryGraph,
+                                   queryGraph: QueryGraph): Double = {
+    val start = System.nanoTime()
+    f(queryGraph)
+    val optTime = (System.nanoTime() - start)/1000000
+    optTime
+  }
+
+  private def testEndtoEndOverheadBeta(f: (QueryGraph, Boolean) => QueryGraph,
+                                   queryGraph: QueryGraph,
+                                   enableShare: Boolean): Double = {
+    val start = System.nanoTime()
+    f(queryGraph, enableShare)
+    val optTime = (System.nanoTime() - start)/1000000
+    optTime
   }
 }

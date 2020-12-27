@@ -28,8 +28,8 @@ def execQ21(spark: SparkSession): Unit = {
     .join(n, $"s_nationkey" === $"n_nationkey")
 
   return init_result
-    .join(l2, ($"l_orderkey" === $"l2_orderkey") and ($"l_suppkey" =!= $"l2_suppkey"), "left_semi")
-    .join(l3, ($"l_orderkey" === $"l3_orderkey") and ($"l_suppkey" =!= $"l3_suppkey"), "left_anti")
+    .join(l2, $"l_orderkey" === $"l2_orderkey" and $"l_suppkey" =!= $"l2_suppkey", "left_semi")
+    .join(l3, $"l_orderkey" === $"l3_orderkey" and $"l_suppkey" =!= $"l3_suppkey", "left_anti")
     .groupBy($"s_name")
     .agg(
         count(lit(1L)).as("numwait"))

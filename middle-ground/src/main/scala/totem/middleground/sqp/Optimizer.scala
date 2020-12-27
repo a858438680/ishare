@@ -116,6 +116,69 @@ object Optimizer {
     decideExecutionPace(queryGraphWithSubqueries, batchFinalWork, nonUniform, isInQP)
   }
 
+  def OptimizeUsingHolistic(queryGraph: QueryGraph): QueryGraph = {
+    val isInQP = false
+    val nonUniform = true
+    val isSWOpt = true
+    val usePaceConf = true
+    val batchFinalWork = Optimizer.getAllBatchFinalWork(queryGraph)
+
+    val optimizedQueryGraph =
+      HolisticOptimizer.holisticOptimize(queryGraph, isSWOpt, usePaceConf, batchFinalWork)
+    val queryGraphWithSubqueries = Optimizer.findSubQueries(optimizedQueryGraph)
+
+    Optimizer.decideExecutionPace(queryGraphWithSubqueries, batchFinalWork, nonUniform, isInQP)
+  }
+
+  def OptimizeUsingBatchMQO_AJoin(queryGraph: QueryGraph): QueryGraph = {
+    val nonUniform = false
+    val isInQP = false
+    val isSWOpt = false
+    val usePaceConf = false
+    val batchFinalWork = getAllBatchFinalWork(queryGraph)
+
+    val optimizedQueryGraph =
+      HolisticOptimizer.holisticOptimize(queryGraph, isSWOpt, usePaceConf, batchFinalWork)
+    val queryGraphWithSubqueries = findSubQueries(optimizedQueryGraph)
+
+    decideExecutionPace(queryGraphWithSubqueries, batchFinalWork, nonUniform, isInQP)
+  }
+
+  def OptimizeUsingSQP_AJoin(queryGraph: QueryGraph,
+                             enableUnshare: Boolean): QueryGraph = {
+    val nonUniform = true
+    val isInQP = false
+    val isSWOpt = false
+    val usePaceConf = false
+    val batchFinalWork = getAllBatchFinalWork(queryGraph)
+    val queryGraphWithPerOPFinalWork = getPerOPFinalWork(queryGraph, batchFinalWork)
+
+    val optimizedQueryGraph =
+      HolisticOptimizer.holisticOptimize(queryGraphWithPerOPFinalWork,
+        isSWOpt, usePaceConf, batchFinalWork)
+    val queryGraphWithSubqueries = findSubQueries(optimizedQueryGraph)
+
+    val queryGraphWithPace =
+      decideExecutionPace(queryGraphWithSubqueries, batchFinalWork, nonUniform, isInQP)
+
+    if (enableUnshare) UnshareMQO(queryGraphWithPace, batchFinalWork)
+    else queryGraphWithPace
+  }
+
+  def OptimizeUsingHolistic_AJoin(queryGraph: QueryGraph): QueryGraph = {
+    val isInQP = false
+    val nonUniform = true
+    val isSWOpt = false
+    val usePaceConf = true
+    val batchFinalWork = Optimizer.getAllBatchFinalWork(queryGraph)
+
+    val optimizedQueryGraph =
+      HolisticOptimizer.holisticOptimize(queryGraph, isSWOpt, usePaceConf, batchFinalWork)
+    val queryGraphWithSubqueries = Optimizer.findSubQueries(optimizedQueryGraph)
+
+    Optimizer.decideExecutionPace(queryGraphWithSubqueries, batchFinalWork, nonUniform, isInQP)
+  }
+
   def testOptimizerWithSQP(queryGraph: QueryGraph): Double = {
     val enableUnshare = true
     val nonUniform = true
