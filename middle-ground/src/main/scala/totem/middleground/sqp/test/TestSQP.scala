@@ -48,7 +48,8 @@ object TestSQP {
         "[Path to kafka topics command] " +
         "[Zookeeper address]" +
         "[Path to hdfs command]" +
-        "[Execution mode: 0 - NoShare, 1 - BatchShare, 2 - SQPShare, 3 - InQP, 4 - Holistic]" +
+        "[Execution mode: 0 - NoShare, 1 - BatchShare, 2 - SQPShare, 3 - InQP, 4 - Holistic, " +
+        "5 - BatchShare (AJoin), 6 - SQPShare (AJoin), 7 - Holistic (AJoin)]" +
         "[Enable Unshare: True or False]" +
         "[DF directory]" +
         "[Config file]" +
