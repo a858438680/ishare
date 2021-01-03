@@ -940,7 +940,7 @@ object CostEstimater {
       mutable.HashMap.empty[(mutable.HashSet[Int], mutable.HashSet[Int]), Double]
     val totalWorkCache =
       mutable.HashMap.empty[mutable.HashSet[Int], Double]
-    val cacheForBatchNum = mutable.HashMap.empty[Int, (Double, Double)]
+    val batchNumCache = mutable.HashMap.empty[mutable.HashSet[Int], Int]
 
     // Populate the benefit Cache
     cluster.foreach(qidGroup => {
@@ -950,7 +950,7 @@ object CostEstimater {
           if (!benefitCache.contains(groupPair)) {
             val benefit =
               computeBenefitBetweenTwoGroups(qidGroup, otherQidGroup,
-                rootNode, curNodeSet, constraint, totalWorkCache, cacheForBatchNum)
+                rootNode, curNodeSet, constraint, totalWorkCache, batchNumCache)
             benefitCache.put(groupPair, benefit)
           }
         }
@@ -984,7 +984,7 @@ object CostEstimater {
           val newGroupPair = getGroupPair(group, newGroup)
           val newBenefit =
             computeBenefitBetweenTwoGroups(newGroup, group, rootNode,
-              curNodeSet, constraint, totalWorkCache, cacheForBatchNum)
+              curNodeSet, constraint, totalWorkCache, batchNumCache)
           benefitCache.put(newGroupPair, newBenefit)
         })
         cluster.add(newGroup)
@@ -994,10 +994,10 @@ object CostEstimater {
 
     // Finally return the total estimated work reduced by unsharing
     val orgTotalWork = computeTotalWork(rootNode, curNodeSet, qidSet,
-      getConstraintForGroup(qidSet, constraint), cacheForBatchNum)
+      getConstraintForGroup(qidSet, constraint), batchNumCache.getOrElse(qidSet, 1))
     val unShareTotalWork = cluster.map(qidGroup => {
       computeTotalWork(rootNode, curNodeSet, qidGroup,
-        getConstraintForGroup(qidGroup, constraint), cacheForBatchNum)
+        getConstraintForGroup(qidGroup, constraint), batchNumCache.getOrElse(qidGroup, 1))
     }).sum
 
     (cluster, orgTotalWork - unShareTotalWork)
@@ -1023,24 +1023,29 @@ object CostEstimater {
               nodeSet: mutable.HashSet[PlanOperator],
               constraint: mutable.HashMap[Int, Double],
               totalWorkCache: mutable.HashMap[mutable.HashSet[Int], Double],
-              cacheForBatchNum: mutable.HashMap[Int, (Double, Double)]):
+              batchNumCache: mutable.HashMap[mutable.HashSet[Int], Int]):
   Double = {
+    val batchNumA = batchNumCache.getOrElseUpdate(qidGroupA, 1)
     val totalWorkA =
       totalWorkCache.getOrElseUpdate(qidGroupA, {
         computeTotalWork(rootNode, nodeSet, qidGroupA,
-          getConstraintForGroup(qidGroupA, constraint), cacheForBatchNum)
+          getConstraintForGroup(qidGroupA, constraint), batchNumA)
       })
+
+    val batchNumB = batchNumCache.getOrElseUpdate(qidGroupB, 1)
     val totalWorkB =
       totalWorkCache.getOrElseUpdate(qidGroupB, {
         computeTotalWork(rootNode, nodeSet, qidGroupB,
-          getConstraintForGroup(qidGroupB, constraint), cacheForBatchNum)
+          getConstraintForGroup(qidGroupB, constraint), batchNumB)
       })
 
     val mergeGroup = qidGroupA ++ qidGroupB
+    val mergeBatchNum =
+      batchNumCache.getOrElseUpdate(mergeBatchNum, math.max(batchNumA, batchNumB))
     val totalWorkMerge =
       totalWorkCache.getOrElseUpdate(mergeGroup, {
         computeTotalWork(rootNode, nodeSet, mergeGroup,
-          getConstraintForGroup(mergeGroup, constraint), cacheForBatchNum)
+          getConstraintForGroup(mergeGroup, constraint), mergeBatchNum)
       })
 
     totalWorkA + totalWorkB - totalWorkMerge * groupOverhead
@@ -1057,29 +1062,25 @@ object CostEstimater {
                                nodeSet: mutable.HashSet[PlanOperator],
                                qidGroup: mutable.HashSet[Int],
                                finalWorkConstraint: Double,
-                               cacheForBatchNum: mutable.HashMap[Int, (Double, Double)]):
+                               cachedBatchNum: Int):
   Double = {
     var batchNum = 1
     val batchWork = computeSubQueryCost(rootNode, nodeSet, qidGroup, batchNum)._1
-    val normalizeRatio = normalizedBatchWork/batchWork
-    val normFinalWorkConstraint = normalizeRatio*finalWorkConstraint
+    val absFinalWorkConstraint = batchWork * finalWorkConstraint
 
-    var curNormFinalWork = normalizedBatchWork
-    var curNormTotalWork = normalizedBatchWork
-    while (curNormFinalWork > normFinalWorkConstraint && batchNum < Catalog.getMaxBatchNum) {
+    var curFinalWork = batchWork
+    var curTotalWork = batchWork
+
+    batchNum = cachedBatchNum
+    while (curFinalWork > absFinalWorkConstraint && batchNum < Catalog.getMaxBatchNum) {
       batchNum += 1
-      val pair = cacheForBatchNum.getOrElseUpdate(batchNum, {
-        val realPair = computeSubQueryCost(rootNode, nodeSet, qidGroup, batchNum)
-        val normTotalWork = realPair._1 * normalizeRatio
-        val normFinalWork = realPair._2 * normalizeRatio
-        (normTotalWork, normFinalWork)
-      })
+      val pair = computeSubQueryCost(rootNode, nodeSet, qidGroup, batchNum)
 
-      curNormTotalWork = pair._1
-      curNormFinalWork = pair._2
+      curTotalWork = pair._1
+      curFinalWork = pair._2
     }
 
-    curNormTotalWork/normalizeRatio
+    curTotalWork
   }
 
   private def computeSubQueryCost(rootNode: PlanOperator,
