@@ -43,9 +43,9 @@ object TestPaceOptimizer {
       else false
 
     val queryGraph = Utils.getParsedQueryGraph(dir, configName)
-    val newQueryGraph = Optimizer.OptimizeUsingBatchMQO(queryGraph)
+    // val newQueryGraph = Optimizer.OptimizeUsingBatchMQO(queryGraph)
     // val newQueryGraph = Optimizer.OptimizedWithoutSharing(queryGraph)
-    // val newQueryGraph = Optimizer.OptimizeUsingSQP(queryGraph, unshare)
+    val newQueryGraph = Optimizer.OptimizeUsingSQP(queryGraph, unshare)
     // val newQueryGraph = Optimizer.OptimizeWithInQP(queryGraph)
 
     Utils.printQueryGraph(newQueryGraph)

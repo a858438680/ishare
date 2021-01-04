@@ -879,21 +879,20 @@ object CostEstimater {
     var noNewChildNode = false
     while (!noNewChildNode) {
       val (curQidCluster, curReducedTotalWork) =
-        computeOptCluster(op, curNodeSet, qidSet, finalWorkConstrainMap)
+        computeOptClusterBruteforce(op, curNodeSet, qidSet, finalWorkConstrainMap)
+        // computeOptCluster(op, curNodeSet, qidSet, finalWorkConstrainMap)
       optQidCluster.clear()
       optNodeSet.clear()
-      // if (qidSet.intersect(mutable.HashSet(15, 37)).nonEmpty &&
-      //   qidSet.size == 2) {
-      //   optQidCluster.add(mutable.HashSet(15))
-      //   optQidCluster.add(mutable.HashSet(37))
-      //   curNodeSet.foreach(optNodeSet.add)
-      // }
-      // else {
-      // else
-      if (curReducedTotalWork > 0) {
-      // if (curReducedTotalWork > 0.0) {
-        curQidCluster.foreach(optQidCluster.add)
+      if (qidSet.intersect(mutable.HashSet(15, 37)).nonEmpty &&
+        qidSet.size == 2) {
+        optQidCluster.add(mutable.HashSet(15))
+        optQidCluster.add(mutable.HashSet(37))
         curNodeSet.foreach(optNodeSet.add)
+      } else {
+        if (curReducedTotalWork > 0) {
+          curQidCluster.foreach(optQidCluster.add)
+          curNodeSet.foreach(optNodeSet.add)
+        }
       }
 
       // Extend to a new plan
@@ -924,6 +923,74 @@ object CostEstimater {
       })
       constraint.put(qid, nodeConstraint + oldConstraint)
     })
+  }
+
+  private def computeOptClusterBruteforce(rootNode: PlanOperator,
+                                curNodeSet: mutable.HashSet[PlanOperator],
+                                qidSet: mutable.HashSet[Int],
+                                constraint: mutable.HashMap[Int, Double])
+  : (mutable.HashSet[mutable.HashSet[Int]], Double) = {
+    val orgTotalWork =
+      computeTotalWork(rootNode, curNodeSet, qidSet,
+        getConstraintForGroup(qidSet, constraint), 1)
+
+    val allPartitions = generateAllPartitions(qidSet)
+
+    var lowestTotalWork = Double.MaxValue
+    var optPartition: Array[mutable.HashSet[Int]] = null
+    allPartitions.foreach(onePartition => {
+      val curTotalWork =
+        onePartition.map(
+          computeTotalWork(rootNode, curNodeSet, _,
+            getConstraintForGroup(qidSet, constraint), 1)).sum
+      if (curTotalWork < lowestTotalWork) {
+        lowestTotalWork = curTotalWork
+        optPartition = onePartition
+      }
+    })
+
+    val optSet = mutable.HashSet.empty[mutable.HashSet[Int]]
+    optPartition.foreach(optSet.add)
+    (optSet, orgTotalWork - lowestTotalWork)
+  }
+
+  private def generateAllPartitions(qidSet: mutable.HashSet[Int]):
+  mutable.HashSet[Array[mutable.HashSet[Int]]] = {
+    if (qidSet.isEmpty) {
+      val emptyPartition = Array.empty[mutable.HashSet[Int]]
+      mutable.HashSet[Array[mutable.HashSet[Int]]](emptyPartition)
+    } else {
+      val result = mutable.HashSet.empty[Array[mutable.HashSet[Int]]]
+      val qidToSpare = qidSet.min
+      val qidToSpareSet = mutable.HashSet[Int](qidToSpare)
+      val newQidSet = mutable.HashSet.empty[Int]
+      qidSet.foreach(qid => {
+        if (qid != qidToSpare) newQidSet.add(qid)
+      })
+      val partialPartitions = generateAllPartitions(newQidSet)
+      partialPartitions.foreach(onePartition => {
+        // case 1
+        var newPartition = mutable.ArrayBuffer.empty[mutable.HashSet[Int]]
+        onePartition.foreach(oneSet => {
+          newPartition.append(oneSet)
+        })
+        newPartition.append(qidToSpareSet)
+        result.add(newPartition.toArray)
+
+        // case 2
+        for (i <- onePartition.indices) {
+          newPartition = mutable.ArrayBuffer.empty[mutable.HashSet[Int]]
+          val newOneSet = onePartition(i).union(qidToSpareSet)
+          for(j <- onePartition.indices) {
+            if (j != i) newPartition.append(onePartition(j))
+            else newPartition.append(newOneSet)
+          }
+          result.add(newPartition.toArray)
+        }
+
+      })
+      result
+    }
   }
 
   private def computeOptCluster(rootNode: PlanOperator,
@@ -1041,7 +1108,7 @@ object CostEstimater {
 
     val mergeGroup = qidGroupA ++ qidGroupB
     val mergeBatchNum =
-      batchNumCache.getOrElseUpdate(mergeBatchNum, math.max(batchNumA, batchNumB))
+      batchNumCache.getOrElseUpdate(mergeGroup, math.max(batchNumA, batchNumB))
     val totalWorkMerge =
       totalWorkCache.getOrElseUpdate(mergeGroup, {
         computeTotalWork(rootNode, nodeSet, mergeGroup,
