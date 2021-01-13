@@ -879,21 +879,21 @@ object CostEstimater {
     var noNewChildNode = false
     while (!noNewChildNode) {
       val (curQidCluster, curReducedTotalWork) =
-        computeOptClusterBruteforce(op, curNodeSet, qidSet, finalWorkConstrainMap)
-        // computeOptCluster(op, curNodeSet, qidSet, finalWorkConstrainMap)
+        // computeOptClusterBruteforce(op, curNodeSet, qidSet, finalWorkConstrainMap)
+        computeOptCluster(op, curNodeSet, qidSet, finalWorkConstrainMap)
       optQidCluster.clear()
       optNodeSet.clear()
-      if (qidSet.intersect(mutable.HashSet(15, 37)).nonEmpty &&
-        qidSet.size == 2) {
-        optQidCluster.add(mutable.HashSet(15))
-        optQidCluster.add(mutable.HashSet(37))
+      // if (qidSet.intersect(mutable.HashSet(15, 37)).nonEmpty &&
+      //   qidSet.size == 2) {
+      //   optQidCluster.add(mutable.HashSet(15))
+      //   optQidCluster.add(mutable.HashSet(37))
+      //   curNodeSet.foreach(optNodeSet.add)
+      // } else {
+        // if (curReducedTotalWork > 0) {
+        curQidCluster.foreach(optQidCluster.add)
         curNodeSet.foreach(optNodeSet.add)
-      } else {
-        if (curReducedTotalWork > 0) {
-          curQidCluster.foreach(optQidCluster.add)
-          curNodeSet.foreach(optNodeSet.add)
-        }
-      }
+        // }
+      // }
 
       // Extend to a new plan
       noNewChildNode = true
@@ -1082,7 +1082,7 @@ object CostEstimater {
     }
   }
 
-  val groupOverhead = 1.0
+  val groupOverhead = 2.0
 
   private def computeBenefitBetweenTwoGroups(qidGroupA: mutable.HashSet[Int],
               qidGroupB: mutable.HashSet[Int],
