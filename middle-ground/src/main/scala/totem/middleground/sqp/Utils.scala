@@ -228,6 +228,18 @@ object Utils {
       referencedAttrs, aliasAttrs, dfStr)
   }
 
+  def computeTotalOpNum(queryGraph: QueryGraph): Unit = {
+    val num =
+      queryGraph.qidToQuery.map(pair => {
+        computeOpNum(pair._2)
+      }).sum
+    println(s"Number of Ops: $num")
+  }
+
+  private def computeOpNum(op: PlanOperator): Int = {
+    op.childOps.map(computeOpNum).sum + 1
+  }
+
   def getParsedQueryGraph(dir: String, configName: String): QueryGraph = {
     val configInfo = Utils.parseConfigFile(configName)
 
