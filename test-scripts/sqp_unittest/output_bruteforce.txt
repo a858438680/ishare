@@ -1,0 +1,412 @@
+Decide Execution Pace Time: 28347ms
+Using bruteforce
+UnShare Estimation time 49ms
+UnShare Physical time 1769ms
+Root of Q8
+	Mat Agg [o_year] [mkt_share -> n2_name,volume] [30, 8]
+==========================
+Root of Q17
+	Mat Agg [] [avg_yearly -> l_extendedprice] [17, 39]
+==========================
+Root of Q26
+	Agg [o_orderpriority] [order_count -> lit(1L)] [26]
+		Join $"o_orderkey" === $"l_orderkey" left_semi [26]
+			Mat Filter [o_orderdate between ("1994-01-01", "1994-08-31")] [30, 27, 5, 4, 8, 26] [8]
+			Mat Filter [l_receiptdate > l_commitdate, l_shipdate between ("1994-08-15", "1994-11-15")] [15, 37, 20, 42, 21, 18, 43, 40, 4, 7, 29, 26] [26]
+==========================
+Root of Q29
+	Mat Agg [l_year, supp_nation, cust_nation] [revenue -> l_extendedprice,l_discount] [7, 29]
+==========================
+Root of Q20
+	Select Out: [s_name, s_address] Alias: [] [20]
+		Join $"s_nationkey" === $"n_nationkey" inner [20]
+			Join $"s_suppkey" === $"ps_suppkey" left_semi [20]
+				Scan supplier [20]
+				Select Out: [ps_suppkey] Alias: [] [20]
+					Join $"ps_partkey" === $"p_partkey" left_semi [20]
+						Mat Join $"ps_partkey" === $"agg_l_partkey" and  $"ps_suppkey" === $"agg_l_suppkey" and $"ps_availqty" > $"agg_l_sum" inner [20, 42]
+						Mat Filter [p_type === "ECONOMY ANODIZED STEEL"] [30, 9, 31, 20, 17, 42, 39, 8] [30, 8]
+			Mat Filter [n_name === "CANADA"] [20, 42, 21, 43] [20, 42]
+==========================
+Root of Q5
+	Mat Agg [n_name] [revenue -> l_extendedprice,l_discount] [27, 5]
+==========================
+Root of Q40
+	Agg [o_totalprice, c_name, o_orderkey, c_custkey, o_orderdate] [sum_quantity -> l_quantity] [40]
+		Join $"o_orderkey" === $"agg_orderkey" left_semi [40]
+			Mat Join $"o_custkey" === $"c_custkey" inner [18, 7, 40, 29]
+			Select Out: [agg_orderkey] Alias: [agg_orderkey -> l_orderkey] [40]
+				Filter [] [40] [40]
+					Agg [l_orderkey] [sum_quantity -> l_quantity] [40]
+						Mat Filter [l_receiptdate > l_commitdate, l_shipdate between ("1994-08-15", "1994-11-15")] [15, 37, 20, 42, 21, 18, 43, 40, 4, 7, 29, 26] [26]
+==========================
+Root of Q4
+	Agg [o_orderpriority] [order_count -> lit(1L)] [4]
+		Join $"o_orderkey" === $"l_orderkey" left_semi [4]
+			Mat Filter [o_orderdate between ("1994-01-01", "1994-08-31")] [30, 27, 5, 4, 8, 26] [8]
+			Mat Filter [l_receiptdate > l_commitdate, l_shipdate between ("1994-08-15", "1994-11-15")] [15, 37, 20, 42, 21, 18, 43, 40, 4, 7, 29, 26] [26]
+==========================
+Root of Q31
+	Mat Agg [nation, o_year] [sum_profit -> amount] [9, 31]
+==========================
+Root of Q43
+	Agg [s_name] [numwait -> lit(1L)] [43]
+		Join $"l_orderkey" === $"l3_orderkey" and  $"l_suppkey" =!= $"l3_suppkey" left_anti [43]
+			Join $"l_orderkey" === $"l2_orderkey" and  $"l_suppkey" =!= $"l2_suppkey" left_semi [43]
+				Mat Join $"s_nationkey" === $"n_nationkey" inner [21, 43]
+				Mat Select Out: [l2_suppkey, l2_orderkey] Alias: [l2_orderkey -> l_orderkey; l2_suppkey -> l_suppkey] [21, 43]
+			Mat Select Out: [l3_orderkey, l3_suppkey] Alias: [l3_suppkey -> l_suppkey; l3_orderkey -> l_orderkey] [21, 43]
+==========================
+Root of Q7
+	Mat Agg [l_year, supp_nation, cust_nation] [revenue -> l_extendedprice,l_discount] [7, 29]
+==========================
+Root of Q37
+	Select Out: [s_name, total_revenue, s_suppkey, s_address, s_phone] Alias: [] [37]
+		Join $"total_revenue" >= $"max_revenue" cross [37]
+			Join $"s_suppkey" === $"supplier_no" inner [37]
+				Scan supplier [37]
+				Mat Select Out: [total_revenue, supplier_no] Alias: [supplier_no -> l_suppkey] [15, 37]
+			Agg [] [max_revenue -> total_revenue] [37]
+				Mat Select Out: [total_revenue, supplier_no] Alias: [supplier_no -> l_suppkey] [15, 37]
+==========================
+Root of Q9
+	Mat Agg [nation, o_year] [sum_profit -> amount] [9, 31]
+==========================
+Root of Q18
+	Agg [o_totalprice, c_name, o_orderkey, c_custkey, o_orderdate] [sum_quantity -> l_quantity] [18]
+		Join $"o_orderkey" === $"agg_orderkey" left_semi [18]
+			Mat Join $"o_custkey" === $"c_custkey" inner [18, 7, 40, 29]
+			Select Out: [agg_orderkey] Alias: [agg_orderkey -> l_orderkey] [18]
+				Filter [] [18] [18]
+					Agg [l_orderkey] [sum_quantity -> l_quantity] [18]
+						Mat Filter [l_receiptdate > l_commitdate, l_shipdate between ("1994-08-15", "1994-11-15")] [15, 37, 20, 42, 21, 18, 43, 40, 4, 7, 29, 26] [26]
+==========================
+Root of Q27
+	Mat Agg [n_name] [revenue -> l_extendedprice,l_discount] [27, 5]
+==========================
+Root of Q21
+	Agg [s_name] [numwait -> lit(1L)] [21]
+		Join $"l_orderkey" === $"l3_orderkey" and  $"l_suppkey" =!= $"l3_suppkey" left_anti [21]
+			Join $"l_orderkey" === $"l2_orderkey" and  $"l_suppkey" =!= $"l2_suppkey" left_semi [21]
+				Mat Join $"s_nationkey" === $"n_nationkey" inner [21, 43]
+				Mat Select Out: [l2_suppkey, l2_orderkey] Alias: [l2_orderkey -> l_orderkey; l2_suppkey -> l_suppkey] [21, 43]
+			Mat Select Out: [l3_orderkey, l3_suppkey] Alias: [l3_suppkey -> l_suppkey; l3_orderkey -> l_orderkey] [21, 43]
+==========================
+Root of Q39
+	Mat Agg [] [avg_yearly -> l_extendedprice] [17, 39]
+==========================
+Root of Q30
+	Mat Agg [o_year] [mkt_share -> n2_name,volume] [30, 8]
+==========================
+Root of Q42
+	Select Out: [s_name, s_address] Alias: [] [42]
+		Join $"s_nationkey" === $"n_nationkey" inner [42]
+			Join $"s_suppkey" === $"ps_suppkey" left_semi [42]
+				Scan supplier [42]
+				Select Out: [ps_suppkey] Alias: [] [42]
+					Join $"ps_partkey" === $"p_partkey" left_semi [42]
+						Mat Join $"ps_partkey" === $"agg_l_partkey" and  $"ps_suppkey" === $"agg_l_suppkey" and $"ps_availqty" > $"agg_l_sum" inner [20, 42]
+						Mat Filter [p_type === "ECONOMY ANODIZED STEEL"] [30, 9, 31, 20, 17, 42, 39, 8] [30, 8]
+			Mat Filter [n_name === "CANADA"] [20, 42, 21, 43] [20, 42]
+==========================
+Root of Q15
+	Select Out: [s_name, total_revenue, s_suppkey, s_address, s_phone] Alias: [] [15]
+		Join $"total_revenue" >= $"max_revenue" cross [15]
+			Join $"s_suppkey" === $"supplier_no" inner [15]
+				Scan supplier [15]
+				Mat Select Out: [total_revenue, supplier_no] Alias: [supplier_no -> l_suppkey] [15, 37]
+			Agg [] [max_revenue -> total_revenue] [15]
+				Mat Select Out: [total_revenue, supplier_no] Alias: [supplier_no -> l_suppkey] [15, 37]
+==========================
+Agg [o_year] [mkt_share -> n2_name,volume] [30, 8]
+	Select Out: [o_year, n2_name, volume] Alias: [o_year -> o_orderdate; volume -> l_extendedprice,l_discount] [30, 8]
+		Join $"s_nationkey" === $"n2_nationkey" inner [30, 8]
+			Join $"n1_regionkey" === $"r_regionkey" inner [30, 8]
+				Join $"c_nationkey" === $"n1_nationkey" inner [30, 8]
+					Join $"o_custkey" === $"c_custkey" inner [30, 8]
+						Join $"l_suppkey" === $"s_suppkey" inner [30, 8]
+							Join $"l_partkey" === $"p_partkey" inner [30, 8]
+								Mat Join $"l_orderkey" === $"o_orderkey" inner [30, 27, 5, 8]
+								Mat Filter [p_type === "ECONOMY ANODIZED STEEL"] [30, 9, 31, 20, 17, 42, 39, 8] [30, 8]
+							Scan supplier [30, 8]
+						Scan customer [30, 8]
+					Select Out: [n1_nationkey, n1_regionkey] Alias: [n1_regionkey -> n_regionkey; n1_nationkey -> n_nationkey] [30, 8]
+						Scan nation [30, 8]
+				Filter [r_name === "AMERICA"] [30, 8] [30, 8]
+					Scan region [30, 8]
+			Select Out: [n2_name, n2_nationkey] Alias: [n2_nationkey -> n_nationkey; n2_name -> n_name] [30, 8]
+				Scan nation [30, 8]
+==========================
+Agg [] [avg_yearly -> l_extendedprice] [17, 39]
+	Join $"l_partkey" === $"p_partkey" inner [17, 39]
+		Join $"l_partkey" === $"agg_l_partkey" and  $"l_quantity" < $"avg_quantity" inner [17, 39]
+			Scan lineitem [17, 39]
+			Select Out: [avg_quantity, agg_l_partkey] Alias: [agg_l_partkey -> l_partkey] [17, 39]
+				Agg [l_partkey] [avg_quantity -> l_quantity] [17, 39]
+					Scan lineitem [17, 39]
+		Mat Filter [p_type === "ECONOMY ANODIZED STEEL"] [30, 9, 31, 20, 17, 42, 39, 8] [30, 8]
+==========================
+Filter [o_orderdate between ("1994-01-01", "1994-08-31")] [30, 27, 5, 4, 8, 26] [8]
+	Filter [o_orderdate between ("1993-09-01", "1994-05-01")] [30, 27, 5, 4, 8, 26] [30]
+		Filter [o_orderdate between ("1993-09-01", "1994-05-01")] [30, 27, 5, 4, 8, 26] [27]
+			Filter [o_orderdate between ("1993-07-01", "1993-10-01")] [30, 27, 5, 4, 8, 26] [4]
+				Filter [o_orderdate between ("1994-01-01", "1994-09-01")] [30, 27, 5, 4, 8, 26] [5]
+					Filter [o_orderdate between ("1993-08-15", "1993-11-15")] [30, 27, 5, 4, 26, 8] [26]
+						Scan orders [30, 27, 5, 4, 8, 26]
+==========================
+Filter [l_receiptdate > l_commitdate, l_shipdate between ("1994-08-15", "1994-11-15")] [15, 37, 20, 42, 21, 18, 43, 40, 4, 7, 29, 26] [26]
+	Filter [l_shipdate between ("1995-01-01", "1995-04-01")] [15, 37, 20, 42, 21, 18, 43, 40, 4, 7, 29, 26] [15]
+		Filter [l_shipdate between ("1994-04-01", "1994-09-31")] [15, 37, 20, 42, 21, 18, 43, 40, 4, 7, 29, 26] [42]
+			Filter [l_receiptdate > l_commitdate, l_shipdate between ("1994-07-01", "1994-10-01")] [15, 37, 20, 42, 21, 18, 43, 40, 4, 7, 29, 26] [21]
+				Filter [l_shipdate between ("1994-01-01", "1994-06-31")] [15, 37, 20, 42, 21, 18, 43, 40, 4, 7, 29, 26] [18]
+					Filter [l_shipdate between ("1995-02-01", "1995-05-01")] [15, 37, 20, 42, 21, 18, 43, 40, 4, 7, 29, 26] [37]
+						Filter [l_shipdate between ("1995-01-01", "1995-06-31")] [15, 37, 20, 42, 21, 18, 7, 43, 40, 4, 29, 26] [7]
+							Filter [l_receiptdate > l_commitdate, l_shipdate between ("1994-04-01", "1994-07-01")] [15, 37, 20, 42, 21, 18, 43, 40, 4, 7, 29, 26] [43]
+								Filter [l_receiptdate > l_commitdate, l_shipdate between ("1994-07-01", "1994-10-01")] [15, 37, 20, 42, 21, 18, 43, 4, 40, 7, 29, 26] [4]
+									Filter [l_shipdate between ("1994-04-01", "1994-09-31")] [15, 37, 20, 42, 21, 18, 43, 40, 4, 7, 29, 26] [40]
+										Filter [l_shipdate between ("1994-01-01", "1994-06-31")] [15, 37, 20, 42, 21, 18, 43, 40, 4, 7, 29, 26] [20]
+											Filter [l_shipdate between ("1994-10-01", "1995-03-31")] [15, 37, 20, 42, 21, 18, 43, 40, 4, 7, 29, 26] [29]
+												Scan lineitem [15, 37, 20, 42, 21, 18, 43, 40, 4, 7, 29, 26]
+==========================
+Agg [l_year, supp_nation, cust_nation] [revenue -> l_extendedprice,l_discount] [7, 29]
+	Select Out: [l_year, l_extendedprice, supp_nation, cust_nation, l_discount] Alias: [l_year -> l_shipdate] [7, 29]
+		Filter [] [7, 29] [7, 29]
+			Join $"c_nationkey" === $"n2_nationkey" inner [7, 29]
+				Join $"s_nationkey" === $"n1_nationkey" inner [7, 29]
+					Join $"l_suppkey" === $"s_suppkey" inner [7, 29]
+						Mat Join $"o_custkey" === $"c_custkey" inner [18, 7, 40, 29]
+						Scan supplier [7, 29]
+					Select Out: [n1_nationkey, supp_nation] Alias: [supp_nation -> n_name; n1_nationkey -> n_nationkey] [7, 29]
+						Scan nation [7, 29]
+				Select Out: [cust_nation, n2_nationkey] Alias: [n2_nationkey -> n_nationkey; cust_nation -> n_name] [7, 29]
+					Scan nation [7, 29]
+==========================
+Join $"ps_partkey" === $"agg_l_partkey" and  $"ps_suppkey" === $"agg_l_suppkey" and $"ps_availqty" > $"agg_l_sum" inner [20, 42]
+	Scan partsupp [20, 42]
+	Select Out: [agg_l_sum, agg_l_partkey, agg_l_suppkey] Alias: [agg_l_suppkey -> l_suppkey; agg_l_partkey -> l_partkey] [20, 42]
+		Agg [l_suppkey, l_partkey] [agg_l_sum -> l_quantity] [20, 42]
+			Mat Filter [l_receiptdate > l_commitdate, l_shipdate between ("1994-08-15", "1994-11-15")] [15, 37, 20, 42, 21, 18, 43, 40, 4, 7, 29, 26] [26]
+==========================
+Filter [p_type === "ECONOMY ANODIZED STEEL"] [30, 9, 31, 20, 17, 42, 39, 8] [30, 8]
+	Filter [p_name like ("forest%")] [30, 9, 31, 20, 17, 42, 39, 8] [42]
+		Filter [p_brand === "Brand#24", p_container === "MED BOX"] [30, 9, 31, 20, 17, 42, 39, 8] [39]
+			Filter [p_name like ("%green%")] [30, 9, 31, 20, 17, 42, 39, 8] [9]
+				Filter [p_name like ("%gray%")] [30, 9, 31, 20, 17, 42, 39, 8] [31]
+					Filter [p_name like ("forest%")] [30, 9, 31, 20, 17, 42, 39, 8] [20]
+						Filter [p_brand === "Brand#23", p_container === "MED BOX"] [30, 9, 31, 20, 17, 42, 39, 8] [17]
+							Scan part [30, 9, 31, 20, 17, 42, 39, 8]
+==========================
+Filter [n_name === "CANADA"] [20, 42, 21, 43] [20, 42]
+	Filter [n_name === "SAUDI ARABIA"] [20, 42, 21, 43] [21]
+		Filter [n_name === "SAUDI ARABIA"] [20, 42, 21, 43] [43]
+			Scan nation [20, 42, 21, 43]
+==========================
+Agg [n_name] [revenue -> l_extendedprice,l_discount] [27, 5]
+	Join $"s_suppkey" === $"l_suppkey" and  $"s_nationkey" === $"c_nationkey" inner [27, 5]
+		Join $"n_nationkey" === $"s_nationkey" inner [27, 5]
+			Join $"r_regionkey" === $"n_regionkey" inner [27, 5]
+				Filter [r_name === "ASIA"] [27, 5] [27, 5]
+					Scan region [27, 5]
+				Scan nation [27, 5]
+			Scan supplier [27, 5]
+		Join $"o_custkey" === $"c_custkey" inner [27, 5]
+			Mat Join $"l_orderkey" === $"o_orderkey" inner [30, 27, 5, 8]
+			Scan customer [27, 5]
+==========================
+Join $"o_custkey" === $"c_custkey" inner [18, 7, 40, 29]
+	Mat Join $"l_orderkey" === $"o_orderkey" inner [21, 18, 43, 40, 7, 29]
+	Scan customer [18, 7, 40, 29]
+==========================
+Agg [nation, o_year] [sum_profit -> amount] [9, 31]
+	Select Out: [nation, o_year, amount] Alias: [o_year -> o_orderdate; amount -> ps_supplycost,l_quantity,l_extendedprice,l_discount; nation -> n_name] [9, 31]
+		Join $"s_nationkey" === $"n_nationkey" inner [9, 31]
+			Join $"l_suppkey" === $"s_suppkey" inner [9, 31]
+				Join $"l_partkey" === $"ps_partkey" and  $"l_suppkey" === $"ps_suppkey" inner [9, 31]
+					Join $"l_orderkey" === $"o_orderkey" inner [9, 31]
+						Join $"l_partkey" === $"p_partkey" inner [9, 31]
+							Scan lineitem [9, 31]
+							Mat Filter [p_type === "ECONOMY ANODIZED STEEL"] [30, 9, 31, 20, 17, 42, 39, 8] [30, 8]
+						Scan orders [9, 31]
+					Scan partsupp [9, 31]
+				Scan supplier [9, 31]
+			Scan nation [9, 31]
+==========================
+Join $"s_nationkey" === $"n_nationkey" inner [21, 43]
+	Join $"l_suppkey" === $"s_suppkey" inner [21, 43]
+		Mat Join $"l_orderkey" === $"o_orderkey" inner [21, 18, 43, 40, 7, 29]
+		Scan supplier [21, 43]
+	Mat Filter [n_name === "CANADA"] [20, 42, 21, 43] [20, 42]
+==========================
+Select Out: [l2_suppkey, l2_orderkey] Alias: [l2_orderkey -> l_orderkey; l2_suppkey -> l_suppkey] [21, 43]
+	Mat Filter [l_receiptdate > l_commitdate, l_shipdate between ("1994-08-15", "1994-11-15")] [15, 37, 20, 42, 21, 18, 43, 40, 4, 7, 29, 26] [26]
+==========================
+Select Out: [l3_orderkey, l3_suppkey] Alias: [l3_suppkey -> l_suppkey; l3_orderkey -> l_orderkey] [21, 43]
+	Mat Filter [l_receiptdate > l_commitdate, l_shipdate between ("1994-08-15", "1994-11-15")] [15, 37, 20, 42, 21, 18, 43, 40, 4, 7, 29, 26] [26]
+==========================
+Select Out: [total_revenue, supplier_no] Alias: [supplier_no -> l_suppkey] [15, 37]
+	Agg [l_suppkey] [total_revenue -> l_extendedprice,l_discount] [15, 37]
+		Mat Filter [l_receiptdate > l_commitdate, l_shipdate between ("1994-08-15", "1994-11-15")] [15, 37, 20, 42, 21, 18, 43, 40, 4, 7, 29, 26] [26]
+==========================
+Join $"l_orderkey" === $"o_orderkey" inner [30, 27, 5, 8]
+	Scan lineitem [30, 27, 5, 8]
+	Mat Filter [o_orderdate between ("1994-01-01", "1994-08-31")] [30, 27, 5, 4, 8, 26] [8]
+==========================
+Join $"l_orderkey" === $"o_orderkey" inner [21, 18, 43, 40, 7, 29]
+	Mat Filter [l_receiptdate > l_commitdate, l_shipdate between ("1994-08-15", "1994-11-15")] [15, 37, 20, 42, 21, 18, 43, 40, 4, 7, 29, 26] [26]
+	Filter [o_orderstatus === "F"] [21, 18, 43, 40, 7, 29] [21, 43]
+		Scan orders [21, 18, 43, 40, 7, 29]
+
+Query 15 with constraint 0.1 and finalwork 1369899.2000000002
+================================================================
+Q_19: 2
+	Q_36: 4
+		Q_25: 100
+
+Query 30 with constraint 0.1 and finalwork 1496752.55
+================================================================
+Q_17: 1
+	Q_20: 6
+		Q_21: 39
+			Q_22: 47
+		Q_23: 79
+
+Query 9 with constraint 0.1 and finalwork 1838544.0
+================================================================
+Q_12: 1
+	Q_32: 15
+		Q_23: 79
+
+Query 37 with constraint 0.1 and finalwork 1369899.2000000002
+================================================================
+Q_11: 2
+	Q_36: 4
+		Q_25: 100
+
+Query 31 with constraint 0.1 and finalwork 1838544.0
+================================================================
+Q_8: 1
+	Q_32: 15
+		Q_23: 79
+
+Query 17 with constraint 0.1 and finalwork 2492334.0
+================================================================
+Q_1: 1
+	Q_24: 44
+		Q_23: 79
+
+Query 39 with constraint 0.1 and finalwork 2492334.0
+================================================================
+Q_16: 1
+	Q_24: 44
+		Q_23: 79
+
+Query 18 with constraint 0.1 and finalwork 2351498.0
+================================================================
+Q_13: 4
+	Q_27: 52
+		Q_28: 61
+			Q_25: 100
+	Q_25: 100
+
+Query 4 with constraint 0.1 and finalwork 845744.832
+================================================================
+Q_7: 7
+	Q_25: 100
+	Q_22: 47
+
+Query 40 with constraint 0.1 and finalwork 2351498.0
+================================================================
+Q_6: 4
+	Q_27: 52
+		Q_28: 61
+			Q_25: 100
+	Q_25: 100
+
+Query 26 with constraint 0.1 and finalwork 845744.832
+================================================================
+Q_2: 7
+	Q_25: 100
+	Q_22: 47
+
+Query 27 with constraint 0.1 and finalwork 1544745.1500000001
+================================================================
+Q_14: 1
+	Q_31: 9
+		Q_21: 39
+			Q_22: 47
+
+Query 5 with constraint 0.1 and finalwork 1544745.1500000001
+================================================================
+Q_5: 1
+	Q_31: 9
+		Q_21: 39
+			Q_22: 47
+
+Query 20 with constraint 0.1 and finalwork 1083583.4103200003
+================================================================
+Q_4: 65
+	Q_30: 65
+	Q_29: 100
+		Q_25: 100
+	Q_23: 79
+
+Query 42 with constraint 0.1 and finalwork 1083583.4103200003
+================================================================
+Q_18: 65
+	Q_30: 65
+	Q_29: 100
+		Q_25: 100
+	Q_23: 79
+
+Query 21 with constraint 0.1 and finalwork 2281376.8056875444
+================================================================
+Q_15: 1
+	Q_33: 5
+		Q_30: 65
+		Q_28: 61
+			Q_25: 100
+	Q_34: 26
+		Q_25: 100
+	Q_35: 26
+		Q_25: 100
+
+Query 7 with constraint 0.1 and finalwork 1233224.5
+================================================================
+Q_10: 1
+	Q_26: 19
+		Q_27: 52
+			Q_28: 61
+				Q_25: 100
+
+Query 43 with constraint 0.1 and finalwork 2281376.8056875444
+================================================================
+Q_9: 1
+	Q_33: 5
+		Q_30: 65
+		Q_28: 61
+			Q_25: 100
+	Q_34: 26
+		Q_25: 100
+	Q_35: 26
+		Q_25: 100
+
+Query 29 with constraint 0.1 and finalwork 1233224.5
+================================================================
+Q_3: 1
+	Q_26: 19
+		Q_27: 52
+			Q_28: 61
+				Q_25: 100
+
+Query 8 with constraint 0.1 and finalwork 1496752.55
+================================================================
+Q_0: 1
+	Q_20: 6
+		Q_21: 39
+			Q_22: 47
+		Q_23: 79
+
+
+Qid Cluster After Optimization
+Cluster 1: [15, 30, 9, 37, 31, 17, 39, 18, 40, 4, 26, 27, 5, 20, 42, 21, 7, 43, 29, 8]
+
